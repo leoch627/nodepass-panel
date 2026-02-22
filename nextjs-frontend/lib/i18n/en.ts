@@ -294,6 +294,7 @@ const en: Translations = {
     ipv6DockerPrerequisite: 'IPv6 Prerequisites',
     ipv6DockerDaemonDesc: 'Docker must be configured for IPv6 support first. Edit or create /etc/docker/daemon.json:',
     ipv6DockerRestart: 'Restart Docker to apply the configuration:',
+    uninstallCommand: 'Uninstall Command',
   },
   user: {
     title: 'User Management',

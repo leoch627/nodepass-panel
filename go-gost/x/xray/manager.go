@@ -584,8 +584,18 @@ func (m *XrayManager) HotAddInbound(cfg InboundConfig) error {
 		m.ensureBaseConfig()
 		m.updateConfigFile(func(config map[string]interface{}) {
 			inbounds, _ := config["inbounds"].([]interface{})
-			inbounds = append(inbounds, inboundObj)
-			config["inbounds"] = inbounds
+			// Remove any existing inbound with the same tag to avoid duplicates
+			var filtered []interface{}
+			for _, ib := range inbounds {
+				if ibMap, ok := ib.(map[string]interface{}); ok {
+					if ibMap["tag"] == cfg.Tag {
+						continue
+					}
+				}
+				filtered = append(filtered, ib)
+			}
+			filtered = append(filtered, inboundObj)
+			config["inbounds"] = filtered
 		})
 		if err := m.Start(); err != nil {
 			return fmt.Errorf("failed to start Xray: %v", err)
@@ -614,8 +624,18 @@ hotAdd:
 	// Update config file for persistence
 	m.updateConfigFile(func(config map[string]interface{}) {
 		inbounds, _ := config["inbounds"].([]interface{})
-		inbounds = append(inbounds, inboundObj)
-		config["inbounds"] = inbounds
+		// Remove any existing inbound with the same tag to avoid duplicates
+		var filtered []interface{}
+		for _, ib := range inbounds {
+			if ibMap, ok := ib.(map[string]interface{}); ok {
+				if ibMap["tag"] == cfg.Tag {
+					continue
+				}
+			}
+			filtered = append(filtered, ib)
+		}
+		filtered = append(filtered, inboundObj)
+		config["inbounds"] = filtered
 	})
 
 	fmt.Printf("✅ Hot-added inbound: %s\n", cfg.Tag)

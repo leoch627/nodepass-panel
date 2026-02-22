@@ -139,6 +139,29 @@ func NodeInstallBinary(c *gin.Context) {
 	c.File(binaryPath)
 }
 
+func NodeUninstallScript(c *gin.Context) {
+	script := `#!/bin/bash
+set -e
+
+echo "Stopping gost-node service..."
+systemctl stop gost-node 2>/dev/null || true
+systemctl disable gost-node 2>/dev/null || true
+rm -f /etc/systemd/system/gost-node.service
+systemctl daemon-reload
+
+echo "Removing binaries..."
+rm -f /usr/local/bin/gost-node
+rm -f /usr/local/bin/xray
+
+echo "Removing config directory..."
+rm -rf /etc/gost
+
+echo "GOST Node uninstalled successfully!"
+`
+	c.Header("Content-Type", "text/plain; charset=utf-8")
+	c.String(http.StatusOK, script)
+}
+
 func NodeInstallXray(c *gin.Context) {
 	arch := c.Param("arch")
 	if !allowedArchs[arch] {
