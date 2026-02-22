@@ -34,7 +34,8 @@ func AssignUserTunnel(d dto.UserTunnelDto) dto.R {
 		TunnelId:      d.TunnelId,
 		Num:           d.Num,
 		Flow:          d.Flow,
-		FlowResetTime: d.FlowResetTime,
+		FlowResetType: d.FlowResetType,
+		FlowResetDay:  d.FlowResetDay,
 		ExpTime:       d.ExpTime,
 		SpeedId:       d.SpeedId,
 		Status:        1,
@@ -136,8 +137,11 @@ func UpdateUserTunnel(d dto.UserTunnelUpdateDto) dto.R {
 	if d.Flow != nil {
 		updates["flow"] = *d.Flow
 	}
-	if d.FlowResetTime != nil {
-		updates["flow_reset_time"] = *d.FlowResetTime
+	if d.FlowResetType != nil {
+		updates["flow_reset_type"] = *d.FlowResetType
+	}
+	if d.FlowResetDay != nil {
+		updates["flow_reset_day"] = *d.FlowResetDay
 	}
 	if d.ExpTime != nil {
 		updates["exp_time"] = *d.ExpTime

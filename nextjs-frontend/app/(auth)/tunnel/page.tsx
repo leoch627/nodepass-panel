@@ -10,12 +10,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Trash2, Edit2, UserPlus, Users } from 'lucide-react';
+import { Plus, Trash2, Edit2, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   getTunnelList, createTunnel, updateTunnel, deleteTunnel,
-  assignUserTunnel, getUserTunnelList, removeUserTunnel,
+  assignUserTunnel, getUserTunnelList, removeUserTunnel, updateUserTunnel,
 } from '@/lib/api/tunnel';
+import { getSpeedLimitList } from '@/lib/api/config';
 import { getNodeList } from '@/lib/api/node';
 import { getAllUsers } from '@/lib/api/user';
 import { useAuth } from '@/lib/hooks/use-auth';
@@ -39,7 +40,17 @@ export default function TunnelPage() {
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [userTunnels, setUserTunnels] = useState<any[]>([]);
   const [userTunnelLoading, setUserTunnelLoading] = useState(false);
-  const [assignForm, setAssignForm] = useState({ userId: '', tunnelId: '' });
+  const [speedLimits, setSpeedLimits] = useState<any[]>([]);
+  const [assignForm, setAssignForm] = useState({
+    userId: '', tunnelId: '', flow: '', num: '', expTime: '', speedId: '', flowResetType: '0', flowResetDay: '1',
+  });
+
+  // Edit user-tunnel state
+  const [editUtDialogOpen, setEditUtDialogOpen] = useState(false);
+  const [editingUt, setEditingUt] = useState<any>(null);
+  const [editUtForm, setEditUtForm] = useState({
+    flow: '', num: '', expTime: '', speedId: '', flowResetType: '0', flowResetDay: '1', status: '1',
+  });
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -48,8 +59,9 @@ export default function TunnelPage() {
       if (tunnelRes.code === 0) setTunnels(tunnelRes.data || []);
       if (nodeRes.code === 0) setNodes(nodeRes.data || []);
       if (isAdmin) {
-        const userRes = await getAllUsers();
+        const [userRes, speedRes] = await Promise.all([getAllUsers(), getSpeedLimitList()]);
         if (userRes.code === 0) setUsers(userRes.data || []);
+        if (speedRes.code === 0) setSpeedLimits(speedRes.data || []);
       }
     } catch {
       toast.error(t('common.loadFailed'));
@@ -137,25 +149,76 @@ export default function TunnelPage() {
       toast.error(t('tunnel.selectUserAndTunnel'));
       return;
     }
-    const res = await assignUserTunnel({
+    const data: any = {
       userId: parseInt(assignForm.userId),
       tunnelId: parseInt(assignForm.tunnelId),
-    });
+      flowResetType: parseInt(assignForm.flowResetType),
+      flowResetDay: parseInt(assignForm.flowResetDay),
+    };
+    if (assignForm.flow) data.flow = parseFloat(assignForm.flow);
+    if (assignForm.num) data.num = parseInt(assignForm.num);
+    if (assignForm.expTime) data.expTime = new Date(assignForm.expTime).getTime();
+    if (assignForm.speedId) data.speedId = parseInt(assignForm.speedId);
+    const res = await assignUserTunnel(data);
     if (res.code === 0) {
       toast.success(t('tunnel.assignSuccess'));
       setAssignDialogOpen(false);
-      setAssignForm({ userId: '', tunnelId: '' });
+      setAssignForm({ userId: '', tunnelId: '', flow: '', num: '', expTime: '', speedId: '', flowResetType: '0', flowResetDay: '1' });
       loadUserTunnels();
     } else {
       toast.error(res.msg);
     }
   };
 
-  const handleRemoveUserTunnel = async (userId: number, tunnelId: number) => {
+  const handleEditUt = (ut: any) => {
+    setEditingUt(ut);
+    setEditUtForm({
+      flow: ut.flow?.toString() || '',
+      num: ut.num?.toString() || '',
+      expTime: ut.expTime ? new Date(ut.expTime).toISOString().slice(0, 16) : '',
+      speedId: ut.speedId?.toString() || '',
+      flowResetType: (ut.flowResetType || 0).toString(),
+      flowResetDay: (ut.flowResetDay || 1).toString(),
+      status: (ut.status ?? 1).toString(),
+    });
+    setEditUtDialogOpen(true);
+  };
+
+  const handleUpdateUt = async () => {
+    if (!editingUt) return;
+    const data: any = {
+      id: editingUt.id,
+      flowResetType: parseInt(editUtForm.flowResetType),
+      flowResetDay: parseInt(editUtForm.flowResetDay),
+      status: parseInt(editUtForm.status),
+    };
+    data.flow = editUtForm.flow ? parseFloat(editUtForm.flow) : 0;
+    data.num = editUtForm.num ? parseInt(editUtForm.num) : 0;
+    data.expTime = editUtForm.expTime ? new Date(editUtForm.expTime).getTime() : 0;
+    data.speedId = editUtForm.speedId ? parseInt(editUtForm.speedId) : 0;
+    const res = await updateUserTunnel(data);
+    if (res.code === 0) {
+      toast.success(t('common.updateSuccess'));
+      setEditUtDialogOpen(false);
+      loadUserTunnels();
+    } else {
+      toast.error(res.msg);
+    }
+  };
+
+  const handleRemoveUserTunnel = async (id: number) => {
     if (!confirm(t('tunnel.removeConfirm'))) return;
-    const res = await removeUserTunnel({ userId, tunnelId });
+    const res = await removeUserTunnel({ id });
     if (res.code === 0) { toast.success(t('tunnel.removeSuccess')); loadUserTunnels(); }
     else toast.error(res.msg);
+  };
+
+  const formatBytes = (bytes: number) => {
+    if (!bytes) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   const getNodeName = (nodeId: number) => {
@@ -248,7 +311,10 @@ export default function TunnelPage() {
 
         <TabsContent value="assign" className="space-y-4">
           <div className="flex justify-end">
-            <Button onClick={() => setAssignDialogOpen(true)}>
+            <Button onClick={() => {
+              setAssignForm({ userId: '', tunnelId: '', flow: '', num: '', expTime: '', speedId: '', flowResetType: '0', flowResetDay: '1' });
+              setAssignDialogOpen(true);
+            }}>
               <UserPlus className="mr-2 h-4 w-4" />{t('tunnel.assignBtn')}
             </Button>
           </div>
@@ -259,26 +325,52 @@ export default function TunnelPage() {
                   <TableRow>
                     <TableHead>{t('tunnel.user')}</TableHead>
                     <TableHead>{t('tunnel.selectTunnel')}</TableHead>
+                    <TableHead>{t('tunnel.flowUsed')}</TableHead>
+                    <TableHead>{t('tunnel.forwardNum')}</TableHead>
+                    <TableHead>{t('tunnel.speedLimit')}</TableHead>
+                    <TableHead>{t('tunnel.expireTime')}</TableHead>
+                    <TableHead>{t('tunnel.statusLabel')}</TableHead>
                     <TableHead>{t('tunnel.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {userTunnelLoading ? (
-                    <TableRow><TableCell colSpan={3} className="text-center py-8">{t('common.loading')}</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center py-8">{t('common.loading')}</TableCell></TableRow>
                   ) : userTunnels.length === 0 ? (
-                    <TableRow><TableCell colSpan={3} className="text-center py-8 text-muted-foreground">{t('tunnel.noAssign')}</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">{t('tunnel.noAssign')}</TableCell></TableRow>
                   ) : (
-                    userTunnels.map((ut: any, idx: number) => (
-                      <TableRow key={idx}>
-                        <TableCell>{ut.userName || ut.userId}</TableCell>
-                        <TableCell>{ut.tunnelName || ut.tunnelId}</TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="icon" onClick={() => handleRemoveUserTunnel(ut.userId, ut.tunnelId)} className="text-destructive">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                    userTunnels.map((ut: any, idx: number) => {
+                      const utUsed = (ut.inFlow || 0) + (ut.outFlow || 0);
+                      return (
+                        <TableRow key={idx}>
+                          <TableCell>{ut.userName || ut.userId}</TableCell>
+                          <TableCell>{ut.tunnelName || ut.tunnelId}</TableCell>
+                          <TableCell className="text-sm">
+                            {formatBytes(utUsed)} / {ut.flow ? `${ut.flow} GB` : t('common.unlimited')}
+                          </TableCell>
+                          <TableCell>{ut.num || t('common.unlimited')}</TableCell>
+                          <TableCell>{ut.speedName || t('tunnel.noSpeedLimit')}</TableCell>
+                          <TableCell className="text-sm">
+                            {ut.expTime ? new Date(ut.expTime).toLocaleDateString() : t('common.neverExpire')}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={ut.status === 1 ? 'default' : 'secondary'}>
+                              {ut.status === 1 ? t('tunnel.enabled') : t('tunnel.disabled')}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Button variant="ghost" size="icon" onClick={() => handleEditUt(ut)} title={t('tunnel.editAssign')}>
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" onClick={() => handleRemoveUserTunnel(ut.id)} className="text-destructive">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
@@ -379,37 +471,206 @@ export default function TunnelPage() {
 
       {/* Assign User-Tunnel Dialog */}
       <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t('tunnel.assignTunnel')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>{t('tunnel.user')}</Label>
-              <Select value={assignForm.userId} onValueChange={v => setAssignForm(p => ({ ...p, userId: v }))}>
-                <SelectTrigger><SelectValue placeholder={t('tunnel.selectUser')} /></SelectTrigger>
-                <SelectContent>
-                  {users.map((u: any) => (
-                    <SelectItem key={u.id} value={u.id.toString()}>{u.user}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t('tunnel.user')}</Label>
+                <Select value={assignForm.userId} onValueChange={v => setAssignForm(p => ({ ...p, userId: v }))}>
+                  <SelectTrigger><SelectValue placeholder={t('tunnel.selectUser')} /></SelectTrigger>
+                  <SelectContent>
+                    {users.map((u: any) => (
+                      <SelectItem key={u.id} value={u.id.toString()}>{u.user}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>{t('tunnel.selectTunnel')}</Label>
+                <Select value={assignForm.tunnelId} onValueChange={v => setAssignForm(p => ({ ...p, tunnelId: v }))}>
+                  <SelectTrigger><SelectValue placeholder={t('tunnel.selectTunnel')} /></SelectTrigger>
+                  <SelectContent>
+                    {tunnels.map((tun: any) => (
+                      <SelectItem key={tun.id} value={tun.id.toString()}>{tun.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>{t('tunnel.selectTunnel')}</Label>
-              <Select value={assignForm.tunnelId} onValueChange={v => setAssignForm(p => ({ ...p, tunnelId: v }))}>
-                <SelectTrigger><SelectValue placeholder={t('tunnel.selectTunnel')} /></SelectTrigger>
-                <SelectContent>
-                  {tunnels.map((tun: any) => (
-                    <SelectItem key={tun.id} value={tun.id.toString()}>{tun.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t('tunnel.flowGb')}</Label>
+                <Input type="number" value={assignForm.flow} onChange={e => setAssignForm(p => ({ ...p, flow: e.target.value }))} placeholder={t('user.trafficPlaceholder')} />
+              </div>
+              <div className="space-y-2">
+                <Label>{t('tunnel.forwardNum')}</Label>
+                <Input type="number" value={assignForm.num} onChange={e => setAssignForm(p => ({ ...p, num: e.target.value }))} placeholder={t('user.trafficPlaceholder')} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t('tunnel.expireTime')}</Label>
+                <Input type="datetime-local" value={assignForm.expTime} onChange={e => setAssignForm(p => ({ ...p, expTime: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>{t('tunnel.speedLimit')}</Label>
+                <Select value={assignForm.speedId} onValueChange={v => setAssignForm(p => ({ ...p, speedId: v }))}>
+                  <SelectTrigger><SelectValue placeholder={t('tunnel.noSpeedLimit')} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">{t('tunnel.noSpeedLimit')}</SelectItem>
+                    {speedLimits.map((sl: any) => (
+                      <SelectItem key={sl.id} value={sl.id.toString()}>{sl.name} ({sl.speed} Mbps)</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t('tunnel.flowReset')}</Label>
+                <Select value={assignForm.flowResetType} onValueChange={v => setAssignForm(p => ({ ...p, flowResetType: v, flowResetDay: v === '0' ? '1' : p.flowResetDay }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">{t('user.resetNone')}</SelectItem>
+                    <SelectItem value="1">{t('user.resetMonthly')}</SelectItem>
+                    <SelectItem value="2">{t('user.resetWeekly')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {assignForm.flowResetType === '1' && (
+                <div className="space-y-2">
+                  <Label>{t('user.dayOfMonth')}</Label>
+                  <Select value={assignForm.flowResetDay} onValueChange={v => setAssignForm(p => ({ ...p, flowResetDay: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 31 }, (_, i) => (
+                        <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {assignForm.flowResetType === '2' && (
+                <div className="space-y-2">
+                  <Label>{t('user.dayOfWeek')}</Label>
+                  <Select value={assignForm.flowResetDay} onValueChange={v => setAssignForm(p => ({ ...p, flowResetDay: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">{t('user.weekSun')}</SelectItem>
+                      <SelectItem value="1">{t('user.weekMon')}</SelectItem>
+                      <SelectItem value="2">{t('user.weekTue')}</SelectItem>
+                      <SelectItem value="3">{t('user.weekWed')}</SelectItem>
+                      <SelectItem value="4">{t('user.weekThu')}</SelectItem>
+                      <SelectItem value="5">{t('user.weekFri')}</SelectItem>
+                      <SelectItem value="6">{t('user.weekSat')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>{t('common.cancel')}</Button>
             <Button onClick={handleAssign}>{t('tunnel.assign')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit User-Tunnel Dialog */}
+      <Dialog open={editUtDialogOpen} onOpenChange={setEditUtDialogOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t('tunnel.editAssign')}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t('tunnel.flowGb')}</Label>
+                <Input type="number" value={editUtForm.flow} onChange={e => setEditUtForm(p => ({ ...p, flow: e.target.value }))} placeholder={t('user.trafficPlaceholder')} />
+              </div>
+              <div className="space-y-2">
+                <Label>{t('tunnel.forwardNum')}</Label>
+                <Input type="number" value={editUtForm.num} onChange={e => setEditUtForm(p => ({ ...p, num: e.target.value }))} placeholder={t('user.trafficPlaceholder')} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t('tunnel.expireTime')}</Label>
+                <Input type="datetime-local" value={editUtForm.expTime} onChange={e => setEditUtForm(p => ({ ...p, expTime: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>{t('tunnel.speedLimit')}</Label>
+                <Select value={editUtForm.speedId} onValueChange={v => setEditUtForm(p => ({ ...p, speedId: v }))}>
+                  <SelectTrigger><SelectValue placeholder={t('tunnel.noSpeedLimit')} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">{t('tunnel.noSpeedLimit')}</SelectItem>
+                    {speedLimits.map((sl: any) => (
+                      <SelectItem key={sl.id} value={sl.id.toString()}>{sl.name} ({sl.speed} Mbps)</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t('tunnel.flowReset')}</Label>
+                <Select value={editUtForm.flowResetType} onValueChange={v => setEditUtForm(p => ({ ...p, flowResetType: v, flowResetDay: v === '0' ? '1' : p.flowResetDay }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">{t('user.resetNone')}</SelectItem>
+                    <SelectItem value="1">{t('user.resetMonthly')}</SelectItem>
+                    <SelectItem value="2">{t('user.resetWeekly')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {editUtForm.flowResetType === '1' && (
+                <div className="space-y-2">
+                  <Label>{t('user.dayOfMonth')}</Label>
+                  <Select value={editUtForm.flowResetDay} onValueChange={v => setEditUtForm(p => ({ ...p, flowResetDay: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 31 }, (_, i) => (
+                        <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {editUtForm.flowResetType === '2' && (
+                <div className="space-y-2">
+                  <Label>{t('user.dayOfWeek')}</Label>
+                  <Select value={editUtForm.flowResetDay} onValueChange={v => setEditUtForm(p => ({ ...p, flowResetDay: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">{t('user.weekSun')}</SelectItem>
+                      <SelectItem value="1">{t('user.weekMon')}</SelectItem>
+                      <SelectItem value="2">{t('user.weekTue')}</SelectItem>
+                      <SelectItem value="3">{t('user.weekWed')}</SelectItem>
+                      <SelectItem value="4">{t('user.weekThu')}</SelectItem>
+                      <SelectItem value="5">{t('user.weekFri')}</SelectItem>
+                      <SelectItem value="6">{t('user.weekSat')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label>{t('tunnel.statusLabel')}</Label>
+              <Select value={editUtForm.status} onValueChange={v => setEditUtForm(p => ({ ...p, status: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">{t('tunnel.enabled')}</SelectItem>
+                  <SelectItem value="0">{t('tunnel.disabled')}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditUtDialogOpen(false)}>{t('common.cancel')}</Button>
+            <Button onClick={handleUpdateUt}>{t('common.update')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

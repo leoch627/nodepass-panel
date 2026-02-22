@@ -45,11 +45,16 @@ export default function ProfilePage() {
     );
   }
 
-  const usedFlow = packageInfo ? (packageInfo.inFlow || 0) + (packageInfo.outFlow || 0) : 0;
-  const totalFlow = packageInfo?.flow ? packageInfo.flow * 1024 * 1024 * 1024 : 0;
-  const flowPercent = totalFlow > 0 ? Math.min((usedFlow / totalFlow) * 100, 100) : 0;
+  const gostUsed = packageInfo ? (packageInfo.inFlow || 0) + (packageInfo.outFlow || 0) : 0;
+  const gostTotal = packageInfo?.flow ? packageInfo.flow * 1024 * 1024 * 1024 : 0;
+  const gostPercent = gostTotal > 0 ? Math.min((gostUsed / gostTotal) * 100, 100) : 0;
+  const xrayUsed = packageInfo ? (packageInfo.xrayInFlow || 0) + (packageInfo.xrayOutFlow || 0) : 0;
+  const xrayTotal = packageInfo?.xrayFlow ? packageInfo.xrayFlow * 1024 * 1024 * 1024 : 0;
+  const xrayPercent = xrayTotal > 0 ? Math.min((xrayUsed / xrayTotal) * 100, 100) : 0;
   const isExpired = packageInfo?.expTime && new Date(packageInfo.expTime) < new Date();
-  const isOverFlow = totalFlow > 0 && usedFlow >= totalFlow;
+  const isGostOver = gostTotal > 0 && gostUsed >= gostTotal;
+  const isXrayOver = xrayTotal > 0 && xrayUsed >= xrayTotal;
+  const isOverFlow = isGostOver || isXrayOver;
 
   return (
     <div className="space-y-6">
@@ -86,31 +91,31 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        {/* Flow Usage Card */}
+        {/* GOST Flow Usage Card */}
         <Card>
           <CardHeader className="flex flex-row items-center gap-3 pb-2">
             <Database className="h-5 w-5 text-primary" />
-            <CardTitle className="text-lg">{t('profile.trafficUsage')}</CardTitle>
+            <CardTitle className="text-lg">{t('profile.gostTrafficUsage')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">{t('profile.usedTraffic')}</span>
-              <span className="font-medium">{formatBytes(usedFlow)}</span>
+              <span className="font-medium">{formatBytes(gostUsed)}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">{t('profile.totalTraffic')}</span>
               <span className="font-medium">{packageInfo?.flow ? `${packageInfo.flow} GB` : t('common.unlimited')}</span>
             </div>
-            {totalFlow > 0 && (
+            {gostTotal > 0 && (
               <div className="space-y-1">
                 <div className="flex justify-between text-xs text-muted-foreground">
                   <span>{t('profile.usageProgress')}</span>
-                  <span>{flowPercent.toFixed(1)}%</span>
+                  <span>{gostPercent.toFixed(1)}%</span>
                 </div>
                 <div className="w-full bg-muted rounded-full h-2">
                   <div
-                    className={`h-2 rounded-full transition-all ${flowPercent > 90 ? 'bg-destructive' : flowPercent > 70 ? 'bg-yellow-500' : 'bg-primary'}`}
-                    style={{ width: `${flowPercent}%` }}
+                    className={`h-2 rounded-full transition-all ${gostPercent > 90 ? 'bg-destructive' : gostPercent > 70 ? 'bg-yellow-500' : 'bg-primary'}`}
+                    style={{ width: `${gostPercent}%` }}
                   />
                 </div>
               </div>
@@ -122,6 +127,46 @@ export default function ProfilePage() {
             <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground">{t('profile.download')}</span>
               <span>{formatBytes(packageInfo?.outFlow || 0)}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Xray Flow Usage Card */}
+        <Card>
+          <CardHeader className="flex flex-row items-center gap-3 pb-2">
+            <Database className="h-5 w-5 text-primary" />
+            <CardTitle className="text-lg">{t('profile.xrayTrafficUsage')}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">{t('profile.usedTraffic')}</span>
+              <span className="font-medium">{formatBytes(xrayUsed)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">{t('profile.totalTraffic')}</span>
+              <span className="font-medium">{packageInfo?.xrayFlow ? `${packageInfo.xrayFlow} GB` : t('common.unlimited')}</span>
+            </div>
+            {xrayTotal > 0 && (
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>{t('profile.usageProgress')}</span>
+                  <span>{xrayPercent.toFixed(1)}%</span>
+                </div>
+                <div className="w-full bg-muted rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all ${xrayPercent > 90 ? 'bg-destructive' : xrayPercent > 70 ? 'bg-yellow-500' : 'bg-primary'}`}
+                    style={{ width: `${xrayPercent}%` }}
+                  />
+                </div>
+              </div>
+            )}
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">{t('profile.upload')}</span>
+              <span>{formatBytes(packageInfo?.xrayInFlow || 0)}</span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">{t('profile.download')}</span>
+              <span>{formatBytes(packageInfo?.xrayOutFlow || 0)}</span>
             </div>
           </CardContent>
         </Card>

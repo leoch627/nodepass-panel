@@ -11,9 +11,11 @@ type UserDto struct {
 	User          string  `json:"user" binding:"required"`
 	Pwd           string  `json:"pwd" binding:"required"`
 	Flow          int64   `json:"flow"`
+	XrayFlow      int64   `json:"xrayFlow"`
 	Num           int     `json:"num"`
 	ExpTime       int64   `json:"expTime"`
-	FlowResetTime int64   `json:"flowResetTime"`
+	FlowResetType int     `json:"flowResetType"`
+	FlowResetDay  int     `json:"flowResetDay"`
 	Status        *int    `json:"status"`
 	GostEnabled   *int    `json:"gostEnabled"`
 	XrayEnabled   *int    `json:"xrayEnabled"`
@@ -25,9 +27,11 @@ type UserUpdateDto struct {
 	User          string  `json:"user" binding:"required"`
 	Pwd           string  `json:"pwd"`
 	Flow          int64   `json:"flow"`
+	XrayFlow      int64   `json:"xrayFlow"`
 	Num           int     `json:"num"`
 	ExpTime       int64   `json:"expTime"`
-	FlowResetTime int64   `json:"flowResetTime"`
+	FlowResetType int     `json:"flowResetType"`
+	FlowResetDay  int     `json:"flowResetDay"`
 	Status        *int    `json:"status"`
 	GostEnabled   *int    `json:"gostEnabled"`
 	XrayEnabled   *int    `json:"xrayEnabled"`

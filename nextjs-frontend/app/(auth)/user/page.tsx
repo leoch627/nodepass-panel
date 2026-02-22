@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
@@ -36,8 +37,11 @@ export default function UserPage() {
     user: '',
     password: '',
     flow: '',
+    xrayFlow: '',
     num: '',
     expTime: '',
+    flowResetType: '0',
+    flowResetDay: '1',
     gostEnabled: true,
     xrayEnabled: true,
     nodeIds: [] as number[],
@@ -69,8 +73,11 @@ export default function UserPage() {
       user: '',
       password: '',
       flow: '',
+      xrayFlow: '',
       num: '',
       expTime: '',
+      flowResetType: '0',
+      flowResetDay: '1',
       gostEnabled: true,
       xrayEnabled: true,
       nodeIds: [...allNodeIds],
@@ -85,8 +92,11 @@ export default function UserPage() {
       user: u.user || '',
       password: '',
       flow: u.flow?.toString() || '',
+      xrayFlow: u.xrayFlow?.toString() || '',
       num: u.num?.toString() || '',
       expTime: u.expTime ? new Date(u.expTime).toISOString().slice(0, 16) : '',
+      flowResetType: (u.flowResetType || 0).toString(),
+      flowResetDay: (u.flowResetDay || 1).toString(),
       gostEnabled: u.gostEnabled !== 0,
       xrayEnabled: u.xrayEnabled !== 0,
       nodeIds: userNodeIds,
@@ -106,9 +116,12 @@ export default function UserPage() {
       nodeIds: form.nodeIds,
     };
     if (form.password) data.pwd = form.password;
-    if (form.flow) data.flow = parseFloat(form.flow);
+    data.flow = form.flow ? parseFloat(form.flow) : 0;
+    data.xrayFlow = form.xrayFlow ? parseFloat(form.xrayFlow) : 0;
     if (form.num) data.num = parseInt(form.num);
     if (form.expTime) data.expTime = new Date(form.expTime).getTime();
+    data.flowResetType = parseInt(form.flowResetType);
+    data.flowResetDay = parseInt(form.flowResetDay);
 
     let res;
     if (editingUser) {
@@ -193,10 +206,14 @@ export default function UserPage() {
                 <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">{t('common.noData')}</TableCell></TableRow>
               ) : (
                 users.map((u) => {
-                  const usedFlow = (u.inFlow || 0) + (u.outFlow || 0);
-                  const totalFlow = u.flow ? u.flow * 1024 * 1024 * 1024 : 0;
+                  const gostUsed = (u.inFlow || 0) + (u.outFlow || 0);
+                  const gostTotal = u.flow ? u.flow * 1024 * 1024 * 1024 : 0;
+                  const xrayUsed = (u.xrayInFlow || 0) + (u.xrayOutFlow || 0);
+                  const xrayTotal = u.xrayFlow ? u.xrayFlow * 1024 * 1024 * 1024 : 0;
                   const isExpired = u.expTime && new Date(u.expTime) < new Date();
-                  const isOverFlow = totalFlow > 0 && usedFlow >= totalFlow;
+                  const isGostOver = gostTotal > 0 && gostUsed >= gostTotal;
+                  const isXrayOver = xrayTotal > 0 && xrayUsed >= xrayTotal;
+                  const isOverFlow = isGostOver || isXrayOver;
 
                   return (
                     <TableRow key={u.id}>
@@ -217,7 +234,10 @@ export default function UserPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-sm">
-                        {formatBytes(usedFlow)} / {u.flow ? `${u.flow} GB` : t('common.unlimited')}
+                        <div className="space-y-0.5">
+                          <div>GOST: {formatBytes(gostUsed)} / {u.flow ? `${u.flow} GB` : t('common.unlimited')}</div>
+                          <div>Xray: {formatBytes(xrayUsed)} / {u.xrayFlow ? `${u.xrayFlow} GB` : t('common.unlimited')}</div>
+                        </div>
                       </TableCell>
                       <TableCell>{u.num || t('common.unlimited')}</TableCell>
                       <TableCell className="text-sm">
@@ -281,7 +301,7 @@ export default function UserPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>{t('user.trafficGb')}</Label>
+                <Label>{t('user.gostTrafficGb')}</Label>
                 <Input
                   type="number"
                   value={form.flow}
@@ -289,6 +309,17 @@ export default function UserPage() {
                   placeholder={t('user.trafficPlaceholder')}
                 />
               </div>
+              <div className="space-y-2">
+                <Label>{t('user.xrayTrafficGb')}</Label>
+                <Input
+                  type="number"
+                  value={form.xrayFlow}
+                  onChange={e => setForm(p => ({ ...p, xrayFlow: e.target.value }))}
+                  placeholder={t('user.trafficPlaceholder')}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t('user.forwardNum')}</Label>
                 <Input
@@ -298,14 +329,59 @@ export default function UserPage() {
                   placeholder={t('user.forwardPlaceholder')}
                 />
               </div>
+              <div className="space-y-2">
+                <Label>{t('user.expireTime')}</Label>
+                <Input
+                  type="datetime-local"
+                  value={form.expTime}
+                  onChange={e => setForm(p => ({ ...p, expTime: e.target.value }))}
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>{t('user.expireTime')}</Label>
-              <Input
-                type="datetime-local"
-                value={form.expTime}
-                onChange={e => setForm(p => ({ ...p, expTime: e.target.value }))}
-              />
+
+            {/* Flow Reset Settings */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t('user.flowResetType')}</Label>
+                <Select value={form.flowResetType} onValueChange={v => setForm(p => ({ ...p, flowResetType: v, flowResetDay: v === '0' ? '1' : p.flowResetDay }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">{t('user.resetNone')}</SelectItem>
+                    <SelectItem value="1">{t('user.resetMonthly')}</SelectItem>
+                    <SelectItem value="2">{t('user.resetWeekly')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.flowResetType === '1' && (
+                <div className="space-y-2">
+                  <Label>{t('user.dayOfMonth')}</Label>
+                  <Select value={form.flowResetDay} onValueChange={v => setForm(p => ({ ...p, flowResetDay: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 31 }, (_, i) => (
+                        <SelectItem key={i + 1} value={(i + 1).toString()}>{i + 1}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {form.flowResetType === '2' && (
+                <div className="space-y-2">
+                  <Label>{t('user.dayOfWeek')}</Label>
+                  <Select value={form.flowResetDay} onValueChange={v => setForm(p => ({ ...p, flowResetDay: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">{t('user.weekSun')}</SelectItem>
+                      <SelectItem value="1">{t('user.weekMon')}</SelectItem>
+                      <SelectItem value="2">{t('user.weekTue')}</SelectItem>
+                      <SelectItem value="3">{t('user.weekWed')}</SelectItem>
+                      <SelectItem value="4">{t('user.weekThu')}</SelectItem>
+                      <SelectItem value="5">{t('user.weekFri')}</SelectItem>
+                      <SelectItem value="6">{t('user.weekSat')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             <Separator />

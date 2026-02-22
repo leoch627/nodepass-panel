@@ -128,17 +128,19 @@ func ProcessXrayFlowUpload(rawData, secret string) string {
 				"down_traffic": gorm.Expr("down_traffic + ?", client.D),
 			})
 
-		// Update user flow
+		// Update user Xray flow (separate from GOST flow) and check limits under lock
 		lock := getUserLock(fmt.Sprintf("%d", xrayClient.UserId))
 		lock.Lock()
 		DB.Model(&model.User{}).Where("id = ?", xrayClient.UserId).
 			UpdateColumns(map[string]interface{}{
-				"in_flow":  gorm.Expr("in_flow + ?", client.D),
-				"out_flow": gorm.Expr("out_flow + ?", client.U),
+				"xray_in_flow":  gorm.Expr("xray_in_flow + ?", client.D),
+				"xray_out_flow": gorm.Expr("xray_out_flow + ?", client.U),
 			})
+		// Check user-level Xray flow limit (inside lock to prevent race)
+		checkUserXrayLimits(xrayClient.UserId)
 		lock.Unlock()
 
-		// Check traffic limit
+		// Check client-level traffic limit
 		if xrayClient.TotalTraffic > 0 {
 			var updated model.XrayClient
 			DB.First(&updated, xrayClient.ID)
@@ -240,11 +242,14 @@ func checkUserLimits(userId, serviceName string) {
 		return
 	}
 
-	userFlowLimit := user.Flow * bytesToGB
-	userCurrentFlow := user.InFlow + user.OutFlow
-	if userFlowLimit < userCurrentFlow {
-		pauseAllUserServices(userId, serviceName)
-		return
+	// Flow=0 means unlimited, skip check
+	if user.Flow != 0 {
+		userFlowLimit := user.Flow * bytesToGB
+		userCurrentFlow := user.InFlow + user.OutFlow
+		if userFlowLimit < userCurrentFlow {
+			pauseAllUserServices(userId, serviceName)
+			return
+		}
 	}
 
 	if user.ExpTime > 0 && user.ExpTime <= time.Now().UnixMilli() {
@@ -264,10 +269,13 @@ func checkUserTunnelLimits(userTunnelId, serviceName, userId string) {
 		return
 	}
 
-	flow := ut.InFlow + ut.OutFlow
-	if flow >= ut.Flow*bytesToGB {
-		pauseSpecificForward(ut.TunnelId, serviceName, userId)
-		return
+	// Flow=0 means unlimited, skip check
+	if ut.Flow != 0 {
+		flow := ut.InFlow + ut.OutFlow
+		if flow >= ut.Flow*bytesToGB {
+			pauseSpecificForward(ut.TunnelId, serviceName, userId)
+			return
+		}
 	}
 
 	if ut.ExpTime > 0 && ut.ExpTime <= time.Now().UnixMilli() {
@@ -277,6 +285,34 @@ func checkUserTunnelLimits(userTunnelId, serviceName, userId string) {
 
 	if ut.Status != 1 {
 		pauseSpecificForward(ut.TunnelId, serviceName, userId)
+	}
+}
+
+func checkUserXrayLimits(userId int64) {
+	var user model.User
+	if err := DB.First(&user, userId).Error; err != nil {
+		return
+	}
+
+	// XrayFlow=0 means unlimited
+	if user.XrayFlow == 0 {
+		return
+	}
+
+	xrayFlowLimit := user.XrayFlow * bytesToGB
+	xrayCurrentFlow := user.XrayInFlow + user.XrayOutFlow
+	if xrayCurrentFlow >= xrayFlowLimit {
+		// Disable all enabled Xray clients for this user
+		var clients []model.XrayClient
+		DB.Where("user_id = ? AND enable = 1", userId).Find(&clients)
+		for _, client := range clients {
+			DB.Model(&client).Update("enable", 0)
+			var inbound model.XrayInbound
+			if err := DB.First(&inbound, client.InboundId).Error; err == nil {
+				pkg.XrayRemoveClient(inbound.NodeId, inbound.Tag, client.Email)
+			}
+			log.Printf("[Xray流量] 用户 %d 流量超限，已禁用客户端 %s", userId, client.Email)
+		}
 	}
 }
 

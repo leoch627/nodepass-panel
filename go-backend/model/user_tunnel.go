@@ -10,6 +10,8 @@ type UserTunnel struct {
 	InFlow        int64 `gorm:"column:in_flow" json:"inFlow"`
 	OutFlow       int64 `gorm:"column:out_flow" json:"outFlow"`
 	FlowResetTime int64 `gorm:"column:flow_reset_time" json:"flowResetTime"`
+	FlowResetType int   `gorm:"column:flow_reset_type" json:"flowResetType"`
+	FlowResetDay  int   `gorm:"column:flow_reset_day" json:"flowResetDay"`
 	ExpTime       int64 `gorm:"column:exp_time" json:"expTime"`
 	Status        int   `gorm:"column:status" json:"status"`
 }

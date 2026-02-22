@@ -30,9 +30,13 @@ type UserInfoDto struct {
 	Flow          int64  `json:"flow"`
 	InFlow        int64  `json:"inFlow"`
 	OutFlow       int64  `json:"outFlow"`
+	XrayFlow      int64  `json:"xrayFlow"`
+	XrayInFlow    int64  `json:"xrayInFlow"`
+	XrayOutFlow   int64  `json:"xrayOutFlow"`
 	Num           int    `json:"num"`
 	ExpTime       int64  `json:"expTime"`
-	FlowResetTime int64  `json:"flowResetTime"`
+	FlowResetType int    `json:"flowResetType"`
+	FlowResetDay  int    `json:"flowResetDay"`
 	GostEnabled   int    `json:"gostEnabled"`
 	XrayEnabled   int    `json:"xrayEnabled"`
 	CreatedTime   int64  `json:"createdTime"`
@@ -50,11 +54,13 @@ type UserTunnelDetailDto struct {
 	InFlow         int64  `json:"inFlow"         gorm:"column:inFlow"`
 	OutFlow        int64  `json:"outFlow"        gorm:"column:outFlow"`
 	Num            int    `json:"num"            gorm:"column:num"`
-	FlowResetTime  int64  `json:"flowResetTime"  gorm:"column:flowResetTime"`
+	FlowResetType  int    `json:"flowResetType"  gorm:"column:flowResetType"`
+	FlowResetDay   int    `json:"flowResetDay"   gorm:"column:flowResetDay"`
 	ExpTime        int64  `json:"expTime"        gorm:"column:expTime"`
 	SpeedId        *int64 `json:"speedId"        gorm:"column:speedId"`
 	SpeedLimitName string `json:"speedLimitName" gorm:"column:speedLimitName"`
 	Speed          *int   `json:"speed"          gorm:"column:speed"`
+	Status         int    `json:"status"         gorm:"column:status"`
 }
 
 // UserForwardDetailDto contains forward fields joined with tunnel info.
@@ -184,9 +190,11 @@ func CreateUser(d dto.UserDto) dto.R {
 		Pwd:           pkg.HashPassword(d.Pwd),
 		RoleId:        userRoleID,
 		Flow:          d.Flow,
+		XrayFlow:      d.XrayFlow,
 		Num:           d.Num,
 		ExpTime:       d.ExpTime,
-		FlowResetTime: d.FlowResetTime,
+		FlowResetType: d.FlowResetType,
+		FlowResetDay:  d.FlowResetDay,
 		Status:        status,
 		GostEnabled:   gostEnabled,
 		XrayEnabled:   xrayEnabled,
@@ -284,9 +292,11 @@ func UpdateUser(d dto.UserUpdateDto) dto.R {
 	updates := map[string]interface{}{
 		"user":            d.User,
 		"flow":            d.Flow,
+		"xray_flow":       d.XrayFlow,
 		"num":             d.Num,
 		"exp_time":        d.ExpTime,
-		"flow_reset_time": d.FlowResetTime,
+		"flow_reset_type": d.FlowResetType,
+		"flow_reset_day":  d.FlowResetDay,
 		"updated_time":    time.Now().UnixMilli(),
 	}
 	if d.Status != nil {
@@ -445,9 +455,13 @@ func GetUserPackageInfo(userId int64, roleId int) dto.R {
 		Flow:          user.Flow,
 		InFlow:        user.InFlow,
 		OutFlow:       user.OutFlow,
+		XrayFlow:      user.XrayFlow,
+		XrayInFlow:    user.XrayInFlow,
+		XrayOutFlow:   user.XrayOutFlow,
 		Num:           user.Num,
 		ExpTime:       user.ExpTime,
-		FlowResetTime: user.FlowResetTime,
+		FlowResetType: user.FlowResetType,
+		FlowResetDay:  user.FlowResetDay,
 		GostEnabled:   user.GostEnabled,
 		XrayEnabled:   user.XrayEnabled,
 		CreatedTime:   user.CreatedTime,
@@ -468,11 +482,13 @@ func GetUserPackageInfo(userId int64, roleId int) dto.R {
 				0 as inFlow,
 				0 as outFlow,
 				99999 as num,
-				NULL as flowResetTime,
+				0 as flowResetType,
+				0 as flowResetDay,
 				NULL as expTime,
 				NULL as speedId,
 				'无限制' as speedLimitName,
-				NULL as speed
+				NULL as speed,
+				1 as status
 			FROM tunnel t
 			WHERE t.status = 1
 			ORDER BY t.id`).Scan(&tunnelPerms)
@@ -487,11 +503,13 @@ func GetUserPackageInfo(userId int64, roleId int) dto.R {
 				ut.in_flow as inFlow,
 				ut.out_flow as outFlow,
 				ut.num,
-				ut.flow_reset_time as flowResetTime,
+				ut.flow_reset_type as flowResetType,
+				ut.flow_reset_day as flowResetDay,
 				ut.exp_time as expTime,
 				ut.speed_id as speedId,
 				sl.name as speedLimitName,
-				sl.speed
+				sl.speed,
+				ut.status
 			FROM user_tunnel ut
 			LEFT JOIN tunnel t ON ut.tunnel_id = t.id
 			LEFT JOIN speed_limit sl ON ut.speed_id = sl.id
@@ -633,14 +651,16 @@ func UpdatePassword(userId int64, d dto.UpdatePasswordDto) dto.R {
 
 func ResetFlow(d dto.ResetFlowDto, flowType int) dto.R {
 	if flowType == 1 {
-		// Reset user-level flow
+		// Reset user-level flow (both GOST and Xray)
 		var user model.User
 		if err := DB.First(&user, d.ID).Error; err != nil {
 			return dto.Err("用户不存在")
 		}
 		DB.Model(&model.User{}).Where("id = ?", d.ID).Updates(map[string]interface{}{
-			"in_flow":  0,
-			"out_flow": 0,
+			"in_flow":       0,
+			"out_flow":      0,
+			"xray_in_flow":  0,
+			"xray_out_flow": 0,
 		})
 	} else {
 		// Reset user-tunnel flow

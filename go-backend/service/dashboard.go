@@ -34,14 +34,16 @@ func GetAdminDashboardStats() dto.R {
 	trafficData := getTrafficData(0)
 	xrayData := getXrayTrafficData(0)
 
-	// Top 5 users by traffic
+	// Top 5 users by traffic (GOST + Xray combined)
 	type TopUser struct {
-		Name string `json:"name" gorm:"column:user"`
-		Flow int64  `json:"flow"`
+		Name     string `json:"name" gorm:"column:user"`
+		Flow     int64  `json:"flow"`
+		GostFlow int64  `json:"gostFlow"`
+		XrayFlow int64  `json:"xrayFlow"`
 	}
 	var topUsers []TopUser
 	DB.Model(&model.User{}).
-		Select("`user`, (in_flow + out_flow) as flow").
+		Select("`user`, (in_flow + out_flow + xray_in_flow + xray_out_flow) as flow, (in_flow + out_flow) as gost_flow, (xray_in_flow + xray_out_flow) as xray_flow").
 		Where("role_id != 0").
 		Order("flow DESC").
 		Limit(5).
@@ -88,9 +90,13 @@ func GetUserDashboardStats(userId int64) dto.R {
 		"flow":          user.Flow,
 		"inFlow":        user.InFlow,
 		"outFlow":       user.OutFlow,
+		"xrayFlow":      user.XrayFlow,
+		"xrayInFlow":    user.XrayInFlow,
+		"xrayOutFlow":   user.XrayOutFlow,
 		"num":           user.Num,
 		"expTime":       user.ExpTime,
-		"flowResetTime": user.FlowResetTime,
+		"flowResetType": user.FlowResetType,
+		"flowResetDay":  user.FlowResetDay,
 	}
 
 	// Forward count

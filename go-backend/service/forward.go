@@ -795,11 +795,11 @@ func checkUserPermissions(userId int64, roleId int, tunnel *model.Tunnel, exclud
 		return nil, nil, "该隧道权限已到期"
 	}
 
-	// Flow limits — compare actual usage against limit (same logic as checkUserFlowLimits)
-	if user.Flow*bytesToGB <= user.InFlow+user.OutFlow {
+	// Flow limits — compare actual usage against limit (Flow=0 means unlimited)
+	if user.Flow != 0 && user.Flow*bytesToGB <= user.InFlow+user.OutFlow {
 		return nil, nil, "用户总流量已用完"
 	}
-	if ut.Flow*bytesToGB <= ut.InFlow+ut.OutFlow {
+	if ut.Flow != 0 && ut.Flow*bytesToGB <= ut.InFlow+ut.OutFlow {
 		return nil, nil, "该隧道流量已用完"
 	}
 
@@ -820,7 +820,7 @@ func checkForwardQuota(userId int64, tunnelId int64, userTunnel *model.UserTunne
 		userTx = userTx.Where("id != ?", *excludeForwardId)
 	}
 	userTx.Count(&userForwardCount)
-	if userForwardCount >= int64(user.Num) {
+	if user.Num != 0 && userForwardCount >= int64(user.Num) {
 		return fmt.Sprintf("用户总转发数量已达上限，当前限制：%d个", user.Num)
 	}
 
@@ -831,7 +831,7 @@ func checkForwardQuota(userId int64, tunnelId int64, userTunnel *model.UserTunne
 	}
 	var tunnelForwardCount int64
 	tx.Count(&tunnelForwardCount)
-	if tunnelForwardCount >= int64(userTunnel.Num) {
+	if userTunnel.Num != 0 && tunnelForwardCount >= int64(userTunnel.Num) {
 		return fmt.Sprintf("该隧道转发数量已达上限，当前限制：%d个", userTunnel.Num)
 	}
 
@@ -855,14 +855,14 @@ func checkUserFlowLimits(userId int64, tunnel *model.Tunnel) string {
 		return "该隧道权限已到期，无法恢复服务"
 	}
 
-	// Check user total flow
-	if user.Flow*bytesToGB <= user.InFlow+user.OutFlow {
+	// Check user total flow (Flow=0 means unlimited)
+	if user.Flow != 0 && user.Flow*bytesToGB <= user.InFlow+user.OutFlow {
 		return "用户总流量已用完，无法恢复服务"
 	}
 
-	// Check tunnel flow
+	// Check tunnel flow (Flow=0 means unlimited)
 	tunnelFlow := ut.InFlow + ut.OutFlow
-	if ut.Flow*bytesToGB <= tunnelFlow {
+	if ut.Flow != 0 && ut.Flow*bytesToGB <= tunnelFlow {
 		return "该隧道流量已用完，无法恢复服务"
 	}
 

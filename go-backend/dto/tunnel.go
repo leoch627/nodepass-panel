@@ -29,7 +29,8 @@ type UserTunnelDto struct {
 	TunnelId      int64  `json:"tunnelId" binding:"required"`
 	Num           int    `json:"num"`
 	Flow          int64  `json:"flow"`
-	FlowResetTime int64  `json:"flowResetTime"`
+	FlowResetType int    `json:"flowResetType"`
+	FlowResetDay  int    `json:"flowResetDay"`
 	ExpTime       int64  `json:"expTime"`
 	SpeedId       *int64 `json:"speedId"`
 }
@@ -38,7 +39,8 @@ type UserTunnelUpdateDto struct {
 	ID            int64  `json:"id" binding:"required"`
 	Num           *int   `json:"num"`
 	Flow          *int64 `json:"flow"`
-	FlowResetTime *int64 `json:"flowResetTime"`
+	FlowResetType *int   `json:"flowResetType"`
+	FlowResetDay  *int   `json:"flowResetDay"`
 	ExpTime       *int64 `json:"expTime"`
 	SpeedId       *int64 `json:"speedId"`
 	Status        *int   `json:"status"`
