@@ -39,6 +39,13 @@ case $ARCH in
     *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
 esac
 
+# Stop existing service if running (avoid "text file busy" on overwrite)
+if systemctl is-active --quiet gost-node 2>/dev/null; then
+    echo "Stopping existing gost-node service..."
+    systemctl stop gost-node
+fi
+rm -f /usr/local/bin/gost-node
+
 # Download binary
 echo "Downloading gost-node for $ARCH..."
 curl $CURL_FLAGS "$PANEL_ADDR/node-install/binary/$ARCH" -o /usr/local/bin/gost-node
