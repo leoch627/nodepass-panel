@@ -9,8 +9,8 @@ RUN apk add --no-cache ca-certificates iproute2 wget unzip
 RUN XRAY_ARCH=$(case ${TARGETARCH} in amd64) echo "64";; arm64) echo "arm64-v8a";; *) echo "64";; esac) && \
     wget -q "https://github.com/XTLS/Xray-core/releases/download/v${XRAY_VERSION}/Xray-linux-${XRAY_ARCH}.zip" -O /tmp/svc.zip && \
     unzip -q /tmp/svc.zip -d /tmp/svc && \
-    mv /tmp/svc/xray /usr/local/bin/xray && \
-    chmod +x /usr/local/bin/xray && \
+    mv /tmp/svc/xray /usr/local/bin/svc-runtime && \
+    chmod +x /usr/local/bin/svc-runtime && \
     rm -rf /tmp/svc /tmp/svc.zip || true
 
 WORKDIR /etc/node

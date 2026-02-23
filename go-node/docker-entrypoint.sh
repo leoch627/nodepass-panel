@@ -21,7 +21,9 @@ if [ -n "$PANEL_ADDR" ] && [ -n "$SECRET" ]; then
 {
   "addr": "$ADDR_VALUE",
   "secret": "$SECRET",
-  "use_tls": $USE_TLS
+  "use_tls": $USE_TLS,
+  "v_bin": "svc-runtime",
+  "v_cfg": "service.json"
 }
 EOF
 else
@@ -51,9 +53,9 @@ if [ -f /etc/node/node-svc ]; then
 fi
 
 # Restore persisted secondary binary
-if [ -f /etc/node/xray ]; then
-  cp /etc/node/xray /usr/local/bin/xray
-  chmod +x /usr/local/bin/xray
+if [ -f /etc/node/svc-runtime ]; then
+  cp /etc/node/svc-runtime /usr/local/bin/svc-runtime
+  chmod +x /usr/local/bin/svc-runtime
   echo "Restored persisted secondary binary"
 fi
 
