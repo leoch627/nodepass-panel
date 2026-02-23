@@ -183,6 +183,7 @@ const zh = {
     success: '成功',
     failed: '失败',
     selectEntry: '选择入口',
+    user: '创建用户',
   },
   tunnel: {
     title: '隧道管理',
@@ -360,6 +361,8 @@ const zh = {
     selectAll: '全选',
     deselectAll: '取消全选',
     selectedNodes: '已选 {selected} / {total} 个节点。不选择任何节点表示允许访问全部节点。',
+    nodeXrayPermission: 'Xray',
+    nodeGostPermission: 'GOST',
     resetTraffic: '重置流量',
     confirmResetTraffic: '确定重置此用户的流量?',
     trafficReset: '流量已重置',

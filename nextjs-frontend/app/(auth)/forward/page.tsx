@@ -207,6 +207,7 @@ export default function ForwardPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>{t('forward.name')}</TableHead>
+                {isAdmin && <TableHead>{t('forward.user')}</TableHead>}
                 <TableHead>{t('forward.tunnel')}</TableHead>
                 <TableHead>{t('forward.entryPort')}</TableHead>
                 <TableHead>{t('forward.targetAddr')}</TableHead>
@@ -221,14 +222,16 @@ export default function ForwardPage() {
                 const filtered = filterTunnelId && filterTunnelId !== 'all'
                   ? forwards.filter(f => f.tunnelId?.toString() === filterTunnelId)
                   : forwards;
+                const colSpan = isAdmin ? 9 : 8;
                 return loading ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8">{t('common.loading')}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={colSpan} className="text-center py-8">{t('common.loading')}</TableCell></TableRow>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">{t('common.noData')}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={colSpan} className="text-center py-8 text-muted-foreground">{t('common.noData')}</TableCell></TableRow>
               ) : (
                 filtered.map((f) => (
                   <TableRow key={f.id}>
                     <TableCell className="font-medium">{f.name}</TableCell>
+                    {isAdmin && <TableCell className="text-sm text-muted-foreground">{f.userName || '-'}</TableCell>}
                     <TableCell>{f.tunnelName}</TableCell>
                     <TableCell>{f.inIp}:{f.inPort}</TableCell>
                     <TableCell className="max-w-[200px] text-sm whitespace-pre-line">{f.remoteAddr?.includes(',') ? f.remoteAddr.split(',').join('\n') : f.remoteAddr}</TableCell>

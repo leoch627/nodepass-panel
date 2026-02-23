@@ -191,8 +191,8 @@ func ListXrayClients(inboundId, userIdFilter *int64, userId int64, roleId int) d
 		// Non-admin: only see own clients
 		query = query.Where("user_id = ?", userId)
 
-		// Also filter by accessible node inbounds
-		nodeIds := getUserAccessibleNodeIds(userId)
+		// Also filter by Xray-accessible node inbounds
+		nodeIds := getUserAccessibleXrayNodeIds(userId)
 		query = query.Where("inbound_id IN (?)",
 			DB.Model(&model.XrayInbound{}).Select("id").Where("node_id IN ?", nodeIds))
 	} else {

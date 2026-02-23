@@ -64,8 +64,20 @@ func checkXrayNodeAccess(userId int64, roleId int, nodeId int64) *dto.R {
 	if roleId == 0 {
 		return nil
 	}
-	if !UserHasNodeAccess(userId, nodeId) {
+	var un model.UserNode
+	err := DB.Where("user_id = ? AND node_id = ?", userId, nodeId).First(&un).Error
+	if err != nil {
+		// Check if legacy user (no user_node records at all)
+		var total int64
+		DB.Model(&model.UserNode{}).Where("user_id = ?", userId).Count(&total)
+		if total == 0 {
+			return nil // legacy user, allow all
+		}
 		r := dto.Err("无该节点的访问权限")
+		return &r
+	}
+	if un.XrayEnabled != 1 {
+		r := dto.Err("该节点未开启 Xray 权限")
 		return &r
 	}
 	return nil
@@ -82,6 +94,20 @@ func getUserAccessibleNodeIds(userId int64) []int64 {
 	}
 	var ids []int64
 	DB.Model(&model.UserNode{}).Where("user_id = ?", userId).Pluck("node_id", &ids)
+	return ids
+}
+
+func getUserAccessibleXrayNodeIds(userId int64) []int64 {
+	var total int64
+	DB.Model(&model.UserNode{}).Where("user_id = ?", userId).Count(&total)
+	if total == 0 {
+		// Legacy user: return all node IDs
+		var ids []int64
+		DB.Model(&model.Node{}).Pluck("id", &ids)
+		return ids
+	}
+	var ids []int64
+	DB.Model(&model.UserNode{}).Where("user_id = ? AND xray_enabled = 1", userId).Pluck("node_id", &ids)
 	return ids
 }
 
@@ -176,8 +202,8 @@ func ListXrayInbounds(nodeId *int64, userId int64, roleId int) dto.R {
 		}
 		query = query.Where("node_id = ?", *nodeId)
 	} else if roleId != 0 {
-		// Non-admin without nodeId filter: restrict to accessible nodes
-		nodeIds := getUserAccessibleNodeIds(userId)
+		// Non-admin without nodeId filter: restrict to Xray-accessible nodes
+		nodeIds := getUserAccessibleXrayNodeIds(userId)
 		query = query.Where("node_id IN ?", nodeIds)
 	}
 

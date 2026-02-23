@@ -207,10 +207,21 @@ func CreateUser(d dto.UserDto) dto.R {
 		return dto.Err("用户创建失败")
 	}
 
-	// 4. Save user_node records
-	if len(d.NodeIds) > 0 {
+	// 4. Save user_node records (prefer NodePermissions, fallback to NodeIds)
+	if len(d.NodePermissions) > 0 {
+		for _, np := range d.NodePermissions {
+			un := model.UserNode{UserId: user.ID, NodeId: np.NodeId, XrayEnabled: 1, GostEnabled: 1}
+			if np.XrayEnabled != nil {
+				un.XrayEnabled = *np.XrayEnabled
+			}
+			if np.GostEnabled != nil {
+				un.GostEnabled = *np.GostEnabled
+			}
+			DB.Create(&un)
+		}
+	} else if len(d.NodeIds) > 0 {
 		for _, nodeId := range d.NodeIds {
-			DB.Create(&model.UserNode{UserId: user.ID, NodeId: nodeId})
+			DB.Create(&model.UserNode{UserId: user.ID, NodeId: nodeId, XrayEnabled: 1, GostEnabled: 1})
 		}
 	}
 
@@ -221,10 +232,18 @@ func CreateUser(d dto.UserDto) dto.R {
 // GetAllUsers returns all non-admin users.
 // ---------------------------------------------------------------------------
 
-// UserWithNodes wraps a user with their assigned node IDs.
+// NodePermissionDto represents per-node permission info returned in user list.
+type NodePermissionDto struct {
+	NodeId      int64 `json:"nodeId"`
+	XrayEnabled int   `json:"xrayEnabled"`
+	GostEnabled int   `json:"gostEnabled"`
+}
+
+// UserWithNodes wraps a user with their assigned node IDs and permissions.
 type UserWithNodes struct {
 	model.User
-	NodeIds []int64 `json:"nodeIds"`
+	NodeIds         []int64             `json:"nodeIds"`
+	NodePermissions []NodePermissionDto `json:"nodePermissions"`
 }
 
 func GetAllUsers() dto.R {
@@ -243,10 +262,16 @@ func GetAllUsers() dto.R {
 		DB.Where("user_id IN ?", userIds).Find(&userNodes)
 	}
 
-	// Group node IDs by user ID
+	// Group node IDs and permissions by user ID
 	nodeMap := make(map[int64][]int64)
+	permMap := make(map[int64][]NodePermissionDto)
 	for _, un := range userNodes {
 		nodeMap[un.UserId] = append(nodeMap[un.UserId], un.NodeId)
+		permMap[un.UserId] = append(permMap[un.UserId], NodePermissionDto{
+			NodeId:      un.NodeId,
+			XrayEnabled: un.XrayEnabled,
+			GostEnabled: un.GostEnabled,
+		})
 	}
 
 	// Build response
@@ -254,11 +279,15 @@ func GetAllUsers() dto.R {
 	for i, u := range users {
 		u.Pwd = ""
 		result[i] = UserWithNodes{
-			User:    u,
-			NodeIds: nodeMap[u.ID],
+			User:            u,
+			NodeIds:         nodeMap[u.ID],
+			NodePermissions: permMap[u.ID],
 		}
 		if result[i].NodeIds == nil {
 			result[i].NodeIds = []int64{}
+		}
+		if result[i].NodePermissions == nil {
+			result[i].NodePermissions = []NodePermissionDto{}
 		}
 	}
 
@@ -325,11 +354,23 @@ func UpdateUser(d dto.UserUpdateDto) dto.R {
 		return dto.Err("用户更新失败")
 	}
 
-	// Update user_node records if nodeIds is provided
-	if d.NodeIds != nil {
+	// Update user_node records (prefer NodePermissions, fallback to NodeIds)
+	if d.NodePermissions != nil {
+		DB.Where("user_id = ?", d.ID).Delete(&model.UserNode{})
+		for _, np := range d.NodePermissions {
+			un := model.UserNode{UserId: d.ID, NodeId: np.NodeId, XrayEnabled: 1, GostEnabled: 1}
+			if np.XrayEnabled != nil {
+				un.XrayEnabled = *np.XrayEnabled
+			}
+			if np.GostEnabled != nil {
+				un.GostEnabled = *np.GostEnabled
+			}
+			DB.Create(&un)
+		}
+	} else if d.NodeIds != nil {
 		DB.Where("user_id = ?", d.ID).Delete(&model.UserNode{})
 		for _, nodeId := range d.NodeIds {
-			DB.Create(&model.UserNode{UserId: d.ID, NodeId: nodeId})
+			DB.Create(&model.UserNode{UserId: d.ID, NodeId: nodeId, XrayEnabled: 1, GostEnabled: 1})
 		}
 	}
 

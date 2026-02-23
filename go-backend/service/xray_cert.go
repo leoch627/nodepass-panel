@@ -74,7 +74,7 @@ func ListXrayTlsCerts(nodeId *int64, userId int64, roleId int) dto.R {
 		}
 		query = query.Where("node_id = ?", *nodeId)
 	} else if roleId != 0 {
-		nodeIds := getUserAccessibleNodeIds(userId)
+		nodeIds := getUserAccessibleXrayNodeIds(userId)
 		query = query.Where("node_id IN ?", nodeIds)
 	}
 

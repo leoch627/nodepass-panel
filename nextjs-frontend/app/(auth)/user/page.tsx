@@ -44,7 +44,7 @@ export default function UserPage() {
     flowResetDay: '1',
     gostEnabled: true,
     xrayEnabled: true,
-    nodeIds: [] as number[],
+    nodePermissions: [] as { nodeId: number; xrayEnabled: boolean; gostEnabled: boolean }[],
   });
 
   const formatBytes = (bytes: number) => {
@@ -80,14 +80,25 @@ export default function UserPage() {
       flowResetDay: '1',
       gostEnabled: true,
       xrayEnabled: true,
-      nodeIds: [...allNodeIds],
+      nodePermissions: allNodeIds.map(id => ({ nodeId: id, xrayEnabled: true, gostEnabled: true })),
     });
     setDialogOpen(true);
   };
 
   const handleEdit = (u: any) => {
     setEditingUser(u);
-    const userNodeIds = u.nodeIds && u.nodeIds.length > 0 ? u.nodeIds : [...allNodeIds];
+    let perms: { nodeId: number; xrayEnabled: boolean; gostEnabled: boolean }[];
+    if (u.nodePermissions && u.nodePermissions.length > 0) {
+      perms = u.nodePermissions.map((np: any) => ({
+        nodeId: np.nodeId,
+        xrayEnabled: np.xrayEnabled === 1,
+        gostEnabled: np.gostEnabled === 1,
+      }));
+    } else if (u.nodeIds && u.nodeIds.length > 0) {
+      perms = u.nodeIds.map((id: number) => ({ nodeId: id, xrayEnabled: true, gostEnabled: true }));
+    } else {
+      perms = allNodeIds.map(id => ({ nodeId: id, xrayEnabled: true, gostEnabled: true }));
+    }
     setForm({
       user: u.user || '',
       password: '',
@@ -99,7 +110,7 @@ export default function UserPage() {
       flowResetDay: (u.flowResetDay || 1).toString(),
       gostEnabled: u.gostEnabled !== 0,
       xrayEnabled: u.xrayEnabled !== 0,
-      nodeIds: userNodeIds,
+      nodePermissions: perms,
     });
     setDialogOpen(true);
   };
@@ -113,7 +124,11 @@ export default function UserPage() {
       user: form.user,
       gostEnabled: form.gostEnabled ? 1 : 0,
       xrayEnabled: form.xrayEnabled ? 1 : 0,
-      nodeIds: form.nodeIds,
+      nodePermissions: form.nodePermissions.map(np => ({
+        nodeId: np.nodeId,
+        xrayEnabled: np.xrayEnabled ? 1 : 0,
+        gostEnabled: np.gostEnabled ? 1 : 0,
+      })),
     };
     if (form.password) data.pwd = form.password;
     data.flow = form.flow ? parseFloat(form.flow) : 0;
@@ -154,18 +169,35 @@ export default function UserPage() {
   };
 
   const toggleNodeId = (nodeId: number) => {
-    setForm(p => ({
-      ...p,
-      nodeIds: p.nodeIds.includes(nodeId)
-        ? p.nodeIds.filter(id => id !== nodeId)
-        : [...p.nodeIds, nodeId],
-    }));
+    setForm(p => {
+      const exists = p.nodePermissions.find(np => np.nodeId === nodeId);
+      return {
+        ...p,
+        nodePermissions: exists
+          ? p.nodePermissions.filter(np => np.nodeId !== nodeId)
+          : [...p.nodePermissions, { nodeId, xrayEnabled: true, gostEnabled: true }],
+      };
+    });
   };
 
   const toggleAllNodes = () => {
     setForm(p => ({
       ...p,
-      nodeIds: p.nodeIds.length === allNodeIds.length ? [] : [...allNodeIds],
+      nodePermissions: p.nodePermissions.length === allNodeIds.length
+        ? []
+        : allNodeIds.map(id => {
+            const existing = p.nodePermissions.find(np => np.nodeId === id);
+            return existing || { nodeId: id, xrayEnabled: true, gostEnabled: true };
+          }),
+    }));
+  };
+
+  const updateNodePermission = (nodeId: number, field: 'xrayEnabled' | 'gostEnabled', value: boolean) => {
+    setForm(p => ({
+      ...p,
+      nodePermissions: p.nodePermissions.map(np =>
+        np.nodeId === nodeId ? { ...np, [field]: value } : np
+      ),
     }));
   };
 
@@ -415,28 +447,49 @@ export default function UserPage() {
                 <div className="flex items-center justify-between">
                   <Label className="text-base font-semibold">{t('user.nodePermissions')}</Label>
                   <Button variant="outline" size="sm" onClick={toggleAllNodes}>
-                    {form.nodeIds.length === allNodeIds.length ? t('user.deselectAll') : t('user.selectAll')}
+                    {form.nodePermissions.length === allNodeIds.length ? t('user.deselectAll') : t('user.selectAll')}
                   </Button>
                 </div>
-                <div className="max-h-[160px] overflow-y-auto rounded-lg border p-2 space-y-1">
-                  {nodes.map((node) => (
-                    <label
-                      key={node.id}
-                      className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent cursor-pointer"
-                    >
-                      <Checkbox
-                        checked={form.nodeIds.includes(node.id)}
-                        onCheckedChange={() => toggleNodeId(node.id)}
-                      />
-                      <span className="text-sm flex-1">{node.name}</span>
-                      <Badge variant={node.status === 1 ? 'default' : 'secondary'} className="text-xs">
-                        {node.status === 1 ? t('common.online') : t('common.offline')}
-                      </Badge>
-                    </label>
-                  ))}
+                <div className="max-h-[200px] overflow-y-auto rounded-lg border p-2 space-y-1">
+                  {nodes.map((node) => {
+                    const perm = form.nodePermissions.find(np => np.nodeId === node.id);
+                    const isSelected = !!perm;
+                    return (
+                      <div key={node.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleNodeId(node.id)}
+                        />
+                        <span className="text-sm flex-1 cursor-pointer" onClick={() => toggleNodeId(node.id)}>{node.name}</span>
+                        {isSelected && (
+                          <div className="flex items-center gap-3">
+                            <label className="flex items-center gap-1 text-xs">
+                              <Switch
+                                className="scale-75"
+                                checked={perm.xrayEnabled}
+                                onCheckedChange={(v: boolean) => updateNodePermission(node.id, 'xrayEnabled', v)}
+                              />
+                              <span>{t('user.nodeXrayPermission')}</span>
+                            </label>
+                            <label className="flex items-center gap-1 text-xs">
+                              <Switch
+                                className="scale-75"
+                                checked={perm.gostEnabled}
+                                onCheckedChange={(v: boolean) => updateNodePermission(node.id, 'gostEnabled', v)}
+                              />
+                              <span>{t('user.nodeGostPermission')}</span>
+                            </label>
+                          </div>
+                        )}
+                        <Badge variant={node.status === 1 ? 'default' : 'secondary'} className="text-xs">
+                          {node.status === 1 ? t('common.online') : t('common.offline')}
+                        </Badge>
+                      </div>
+                    );
+                  })}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {t('user.selectedNodes', { selected: form.nodeIds.length, total: nodes.length })}
+                  {t('user.selectedNodes', { selected: form.nodePermissions.length, total: nodes.length })}
                 </p>
               </div>
             )}

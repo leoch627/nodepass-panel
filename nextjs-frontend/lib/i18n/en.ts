@@ -185,6 +185,7 @@ const en: Translations = {
     success: 'Success',
     failed: 'Failed',
     selectEntry: 'Select entry',
+    user: 'User',
   },
   tunnel: {
     title: 'Tunnel Management',
@@ -362,6 +363,8 @@ const en: Translations = {
     selectAll: 'Select All',
     deselectAll: 'Deselect All',
     selectedNodes: 'Selected {selected} / {total} nodes. No selection means access to all nodes.',
+    nodeXrayPermission: 'Xray',
+    nodeGostPermission: 'GOST',
     resetTraffic: 'Reset Traffic',
     confirmResetTraffic: 'Are you sure to reset traffic for this user?',
     trafficReset: 'Traffic reset',
