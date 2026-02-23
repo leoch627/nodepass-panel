@@ -1,16 +1,49 @@
 package service
 
 import (
-	"fmt"
 	"flux-panel/go-backend/config"
 	"flux-panel/go-backend/dto"
 	"flux-panel/go-backend/model"
 	"flux-panel/go-backend/pkg"
+	"fmt"
 	"log"
 	"math/rand"
 	"strings"
 	"time"
 )
+
+func shQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "'"
+}
+
+func sanitizeContainerName(s string) string {
+	if s == "" {
+		return ""
+	}
+	var b strings.Builder
+	for i, r := range s {
+		ok := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' || r == '.'
+		if ok {
+			b.WriteRune(r)
+			continue
+		}
+		// Replace unsupported characters to keep generated command valid.
+		if i == 0 {
+			b.WriteRune('a')
+		} else {
+			b.WriteRune('-')
+		}
+	}
+	out := b.String()
+	if out == "" {
+		return ""
+	}
+	first := out[0]
+	if !((first >= 'a' && first <= 'z') || (first >= 'A' && first <= 'Z') || (first >= '0' && first <= '9')) {
+		out = "a" + out
+	}
+	return out
+}
 
 // disguisePool contains common Linux daemon names used to camouflage node processes.
 var disguisePool = []string{
@@ -83,10 +116,10 @@ func GetAllNodes() dto.R {
 			"xrayVersion": n.XrayVersion,
 			"xrayStatus":  n.XrayStatus,
 			// Frontend expects vVersion/vStatus
-			"vVersion": n.XrayVersion,
-			"vStatus":  n.XrayStatus,
-			"createdTime": n.CreatedTime,
-			"updatedTime": n.UpdatedTime,
+			"vVersion":         n.XrayVersion,
+			"vStatus":          n.XrayStatus,
+			"createdTime":      n.CreatedTime,
+			"updatedTime":      n.UpdatedTime,
 			"status":           status,
 			"inx":              n.Inx,
 			"disguiseName":     n.DisguiseName,
@@ -271,8 +304,23 @@ func GenerateDockerInstallCommand(id int64, clientAddr string) dto.R {
 	if imageTag == "" || imageTag == "dev" {
 		imageTag = "latest"
 	}
-	cmd := fmt.Sprintf(`docker stop flux-node 2>/dev/null; docker rm flux-node 2>/dev/null; mkdir -p ~/.flux && docker run -d --name flux-node --restart unless-stopped --network host -v ~/.flux:/etc/node -e PANEL_ADDR=%s -e SECRET=%s 0xnetuser/node:%s`,
-		panelAddr, node.Secret, imageTag)
+	imageRef := fmt.Sprintf("0xnetuser/node:%s", imageTag)
+	containerName := sanitizeContainerName(node.DisguiseName)
+	if containerName == "" {
+		containerName = fmt.Sprintf("svc-agent-%d", node.ID)
+	}
+	labelValue := fmt.Sprintf("n-%d", node.ID)
+	nameEnv := ""
+	if node.DisguiseName != "" {
+		nameEnv += fmt.Sprintf(" -e APP_NAME=%s", shQuote(node.DisguiseName))
+	}
+	if node.XrayDisguiseName != "" {
+		nameEnv += fmt.Sprintf(" -e SEC_NAME=%s", shQuote(node.XrayDisguiseName))
+	}
+	secCfg := "agent.json"
+	nameEnv += fmt.Sprintf(" -e SEC_CFG=%s", shQuote(secCfg))
+	cmd := fmt.Sprintf(`ids="$( { docker ps -aq --filter label=app.scope=%s; docker ps -aq --filter name=^/flux-node$; docker ps -aq --filter name=^/%s$; } | sort -u )"; if [ -n "$ids" ]; then docker rm -f $ids; fi; mkdir -p ~/.flux && docker run -d --name %s --label app.scope=%s --restart unless-stopped --network host -v ~/.flux:/etc/node -e PANEL_ADDR=%s -e SECRET=%s%s %s`,
+		shQuote(labelValue), containerName, shQuote(containerName), shQuote(labelValue), shQuote(panelAddr), shQuote(node.Secret), nameEnv, shQuote(imageRef))
 
 	return dto.Ok(cmd)
 }
