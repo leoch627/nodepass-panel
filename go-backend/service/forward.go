@@ -56,17 +56,6 @@ func CreateForward(d dto.ForwardDto, userId int64, roleId int, userName string) 
 		return dto.Err(ssrfErr)
 	}
 
-	// 0.5 GOST permission check for non-admin users
-	if roleId != adminRoleId {
-		var user model.User
-		if err := DB.First(&user, userId).Error; err != nil {
-			return dto.Err("用户不存在")
-		}
-		if user.GostEnabled != 1 {
-			return dto.Err("你没有 GOST 转发权限")
-		}
-	}
-
 	// 1. Get tunnel, check status
 	var tunnel model.Tunnel
 	if err := DB.First(&tunnel, d.TunnelId).Error; err != nil {
@@ -76,16 +65,16 @@ func CreateForward(d dto.ForwardDto, userId int64, roleId int, userName string) 
 		return dto.Err("隧道已禁用，无法创建转发")
 	}
 
-	// 1.5 Node access check for non-admin users
+	// 1.5 Node access + GOST permission check for non-admin users
 	if roleId != adminRoleId {
 		inNode := GetNodeById(tunnel.InNodeId)
-		if inNode != nil && !UserHasNodeAccess(userId, inNode.ID) {
-			return dto.Err("你没有该入口节点的访问权限")
+		if inNode != nil && !UserHasGostNodeAccess(userId, inNode.ID) {
+			return dto.Err("你没有该入口节点的 GOST 转发权限")
 		}
 		if tunnel.Type == tunnelTypeTunnelForward {
 			outNode := GetNodeById(tunnel.OutNodeId)
-			if outNode != nil && !UserHasNodeAccess(userId, outNode.ID) {
-				return dto.Err("你没有该出口节点的访问权限")
+			if outNode != nil && !UserHasGostNodeAccess(userId, outNode.ID) {
+				return dto.Err("你没有该出口节点的 GOST 转发权限")
 			}
 		}
 	}

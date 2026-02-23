@@ -42,8 +42,6 @@ export default function UserPage() {
     expTime: '',
     flowResetType: '0',
     flowResetDay: '1',
-    gostEnabled: true,
-    xrayEnabled: true,
     nodePermissions: [] as { nodeId: number; xrayEnabled: boolean; gostEnabled: boolean }[],
   });
 
@@ -78,8 +76,6 @@ export default function UserPage() {
       expTime: '',
       flowResetType: '0',
       flowResetDay: '1',
-      gostEnabled: true,
-      xrayEnabled: true,
       nodePermissions: allNodeIds.map(id => ({ nodeId: id, xrayEnabled: true, gostEnabled: true })),
     });
     setDialogOpen(true);
@@ -108,8 +104,6 @@ export default function UserPage() {
       expTime: u.expTime ? new Date(u.expTime).toISOString().slice(0, 16) : '',
       flowResetType: (u.flowResetType || 0).toString(),
       flowResetDay: (u.flowResetDay || 1).toString(),
-      gostEnabled: u.gostEnabled !== 0,
-      xrayEnabled: u.xrayEnabled !== 0,
       nodePermissions: perms,
     });
     setDialogOpen(true);
@@ -122,8 +116,6 @@ export default function UserPage() {
     }
     const data: any = {
       user: form.user,
-      gostEnabled: form.gostEnabled ? 1 : 0,
-      xrayEnabled: form.xrayEnabled ? 1 : 0,
       nodePermissions: form.nodePermissions.map(np => ({
         nodeId: np.nodeId,
         xrayEnabled: np.xrayEnabled ? 1 : 0,
@@ -257,10 +249,10 @@ export default function UserPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
-                          {u.gostEnabled !== 0 && (
+                          {(u.nodePermissions?.length === 0 || u.nodePermissions?.some((np: any) => np.gostEnabled === 1)) && (
                             <Badge variant="outline" className="text-xs">GOST</Badge>
                           )}
-                          {u.xrayEnabled !== 0 && (
+                          {(u.nodePermissions?.length === 0 || u.nodePermissions?.some((np: any) => np.xrayEnabled === 1)) && (
                             <Badge variant="outline" className="text-xs">Xray</Badge>
                           )}
                         </div>
@@ -417,29 +409,6 @@ export default function UserPage() {
             </div>
 
             <Separator />
-
-            {/* Permission Settings */}
-            <div className="space-y-3">
-              <Label className="text-base font-semibold">{t('user.permissionSettings')}</Label>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center justify-between rounded-lg border p-3">
-                  <Label htmlFor="gost-switch" className="text-sm">{t('user.gostForward')}</Label>
-                  <Switch
-                    id="gost-switch"
-                    checked={form.gostEnabled}
-                    onCheckedChange={(checked: boolean) => setForm(p => ({ ...p, gostEnabled: checked }))}
-                  />
-                </div>
-                <div className="flex items-center justify-between rounded-lg border p-3">
-                  <Label htmlFor="xray-switch" className="text-sm">{t('user.xrayProxy')}</Label>
-                  <Switch
-                    id="xray-switch"
-                    checked={form.xrayEnabled}
-                    onCheckedChange={(checked: boolean) => setForm(p => ({ ...p, xrayEnabled: checked }))}
-                  />
-                </div>
-              </div>
-            </div>
 
             {/* Node Permissions */}
             {nodes.length > 0 && (

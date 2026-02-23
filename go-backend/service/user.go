@@ -133,13 +133,19 @@ func Login(d dto.LoginDto) dto.R {
 		return dto.Err("账户停用")
 	}
 
-	// 5. Generate JWT
+	// 5. Derive permissions from node table so the response is always fresh
+	if user.RoleId != adminRoleID {
+		deriveUserPermissions(user.ID)
+		DB.First(&user, user.ID) // reload after derive
+	}
+
+	// 6. Generate JWT
 	token, err := pkg.GenerateToken(&user)
 	if err != nil {
 		return dto.Err("生成令牌失败")
 	}
 
-	// 6. Check default credentials
+	// 7. Check default credentials
 	requirePasswordChange := d.Username == defaultUsername || d.Password == defaultPassword
 
 	return dto.Ok(map[string]interface{}{
@@ -176,15 +182,6 @@ func CreateUser(d dto.UserDto) dto.R {
 		status = *d.Status
 	}
 
-	gostEnabled := 1
-	if d.GostEnabled != nil {
-		gostEnabled = *d.GostEnabled
-	}
-	xrayEnabled := 1
-	if d.XrayEnabled != nil {
-		xrayEnabled = *d.XrayEnabled
-	}
-
 	user := model.User{
 		User:          d.User,
 		Pwd:           pkg.HashPassword(d.Pwd),
@@ -196,8 +193,8 @@ func CreateUser(d dto.UserDto) dto.R {
 		FlowResetType: d.FlowResetType,
 		FlowResetDay:  d.FlowResetDay,
 		Status:        status,
-		GostEnabled:   gostEnabled,
-		XrayEnabled:   xrayEnabled,
+		GostEnabled:   1,
+		XrayEnabled:   1,
 		CreatedTime:   now,
 		UpdatedTime:   now,
 	}
@@ -224,6 +221,9 @@ func CreateUser(d dto.UserDto) dto.R {
 			DB.Create(&model.UserNode{UserId: user.ID, NodeId: nodeId, XrayEnabled: 1, GostEnabled: 1})
 		}
 	}
+
+	// Derive user-level permissions from node permissions
+	deriveUserPermissions(user.ID)
 
 	return dto.Ok("用户创建成功")
 }
@@ -331,12 +331,6 @@ func UpdateUser(d dto.UserUpdateDto) dto.R {
 	if d.Status != nil {
 		updates["status"] = *d.Status
 	}
-	if d.GostEnabled != nil {
-		updates["gost_enabled"] = *d.GostEnabled
-	}
-	if d.XrayEnabled != nil {
-		updates["xray_enabled"] = *d.XrayEnabled
-	}
 	if d.Pwd != "" {
 		if len(d.Pwd) < 8 {
 			return dto.Err("密码长度至少8位")
@@ -373,6 +367,9 @@ func UpdateUser(d dto.UserUpdateDto) dto.R {
 			DB.Create(&model.UserNode{UserId: d.ID, NodeId: nodeId, XrayEnabled: 1, GostEnabled: 1})
 		}
 	}
+
+	// Derive user-level permissions from node permissions
+	deriveUserPermissions(d.ID)
 
 	return dto.Ok("用户更新成功")
 }
@@ -792,4 +789,52 @@ func UserHasNodeAccess(userId, nodeId int64) bool {
 	var count int64
 	DB.Model(&model.UserNode{}).Where("user_id = ? AND node_id = ?", userId, nodeId).Count(&count)
 	return count > 0
+}
+
+// UserHasGostNodeAccess checks if a user has GOST permission on a given node.
+// Legacy users (no user_node records) are granted access.
+func UserHasGostNodeAccess(userId, nodeId int64) bool {
+	var total int64
+	DB.Model(&model.UserNode{}).Where("user_id = ?", userId).Count(&total)
+	if total == 0 {
+		return true // No records = legacy user, allow all
+	}
+	var count int64
+	DB.Model(&model.UserNode{}).Where("user_id = ? AND node_id = ? AND gost_enabled = 1", userId, nodeId).Count(&count)
+	return count > 0
+}
+
+// deriveUserPermissions syncs user.gost_enabled and user.xray_enabled
+// from the user_node table. If no user_node records exist (legacy user),
+// both are set to 1.
+func deriveUserPermissions(userId int64) {
+	var total int64
+	DB.Model(&model.UserNode{}).Where("user_id = ?", userId).Count(&total)
+	if total == 0 {
+		// Legacy user: enable both
+		DB.Model(&model.User{}).Where("id = ?", userId).Updates(map[string]interface{}{
+			"gost_enabled": 1,
+			"xray_enabled": 1,
+		})
+		return
+	}
+
+	var xrayCount int64
+	DB.Model(&model.UserNode{}).Where("user_id = ? AND xray_enabled = 1", userId).Count(&xrayCount)
+	var gostCount int64
+	DB.Model(&model.UserNode{}).Where("user_id = ? AND gost_enabled = 1", userId).Count(&gostCount)
+
+	xray := 0
+	if xrayCount > 0 {
+		xray = 1
+	}
+	gost := 0
+	if gostCount > 0 {
+		gost = 1
+	}
+
+	DB.Model(&model.User{}).Where("id = ?", userId).Updates(map[string]interface{}{
+		"gost_enabled": gost,
+		"xray_enabled": xray,
+	})
 }
