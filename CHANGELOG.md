@@ -1,5 +1,19 @@
 # Changelog
 
+## v2.0.21 — 自动停止 Xray + 监听地址表单修复
+
+### Bug Fixes
+
+- **修复转发监听地址表单初始化**：编辑转发时空 `listenIp` 映射为 `::`，避免下拉框显示"全部接口"但实际值为空导致保存后不生效
+- **删除/禁用最后一个入站时自动停止 Xray**：`DeleteXrayInbound` 和 `DisableXrayInbound` 后检查节点剩余启用入站数，为零则自动调用 `XrayStop`
+
+### Changed Files
+
+- `go-backend/service/xray_inbound.go` — 删除/禁用入站后检查并自动停止 Xray
+- `nextjs-frontend/app/(auth)/forward/page.tsx` — 表单 listenIp 空值初始化为 `::`
+
+---
+
 ## v2.0.20 — 修复节点权限保存 + Xray 权限回收清理 + 排序分组改进
 
 ### Bug Fixes
