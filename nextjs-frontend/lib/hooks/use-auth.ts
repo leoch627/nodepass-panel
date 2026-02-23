@@ -8,7 +8,7 @@ interface AuthState {
   isAdmin: boolean;
   username: string;
   gostEnabled: boolean;
-  xrayEnabled: boolean;
+  vEnabled: boolean;
   loading: boolean;
 }
 
@@ -18,7 +18,7 @@ export function useAuth(): AuthState {
     isAdmin: false,
     username: '',
     gostEnabled: true,
-    xrayEnabled: true,
+    vEnabled: true,
     loading: true,
   });
 
@@ -33,7 +33,7 @@ export function useAuth(): AuthState {
       isAdmin,
       username: name,
       gostEnabled: isAdmin || localStorage.getItem('gost_enabled') !== '0',
-      xrayEnabled: isAdmin || localStorage.getItem('xray_enabled') !== '0',
+      vEnabled: isAdmin || localStorage.getItem('v_enabled') !== '0',
       loading: false,
     });
   }, []);
@@ -59,6 +59,6 @@ export function logout() {
   localStorage.removeItem('name');
   localStorage.removeItem('admin');
   localStorage.removeItem('gost_enabled');
-  localStorage.removeItem('xray_enabled');
+  localStorage.removeItem('v_enabled');
   window.location.href = '/';
 }

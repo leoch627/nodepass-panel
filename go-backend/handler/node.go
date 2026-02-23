@@ -102,6 +102,14 @@ func NodeUpdateBinary(c *gin.Context) {
 		c.JSON(http.StatusOK, dto.Err("参数错误"))
 		return
 	}
+
+	// Legacy nodes (no disguise name) must be reinstalled manually
+	node := service.GetNodeById(d.ID)
+	if node != nil && node.DisguiseName == "" {
+		c.JSON(http.StatusOK, dto.Err("该节点需要使用新的安装命令重新安装，请在节点管理页面点击安装按钮获取新命令"))
+		return
+	}
+
 	panelAddr := service.GetPanelAddress("")
 	result := pkg.NodeUpdateBinary(d.ID, panelAddr)
 	if result == nil || result.Msg != "OK" {

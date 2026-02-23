@@ -13,7 +13,7 @@ import { useAuth } from '@/lib/hooks/use-auth';
 import { useTranslation } from '@/lib/i18n';
 
 export default function XraySubscriptionPage() {
-  const { isAdmin, xrayEnabled } = useAuth();
+  const { isAdmin, vEnabled } = useAuth();
   const { t } = useTranslation();
   const [token, setToken] = useState('');
   const [subUrl, setSubUrl] = useState('');
@@ -34,7 +34,7 @@ export default function XraySubscriptionPage() {
         setSubUrl(tokenRes.data.url);
       } else {
         const base = window.location.origin;
-        setSubUrl(`${base}/api/v1/xray/sub/${tokenData}`);
+        setSubUrl(`${base}/api/v1/v/sub/${tokenData}`);
       }
     }
     if (linksRes.code === 0) {
@@ -89,7 +89,7 @@ export default function XraySubscriptionPage() {
     );
   }
 
-  if (!isAdmin && !xrayEnabled) {
+  if (!isAdmin && !vEnabled) {
     return (
       <div className="flex items-center justify-center h-64">
         <p className="text-muted-foreground">{t('xraySub.noPermission')}</p>

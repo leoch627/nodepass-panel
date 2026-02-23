@@ -31,7 +31,7 @@ import InboundDialog from './_components/inbound-dialog';
 import { useTranslation } from '@/lib/i18n';
 
 export default function XrayInboundPage() {
-  const { isAdmin, xrayEnabled } = useAuth();
+  const { isAdmin, vEnabled } = useAuth();
   const { t } = useTranslation();
   const [inbounds, setInbounds] = useState<any[]>([]);
   const [nodes, setNodes] = useState<any[]>([]);
@@ -343,7 +343,7 @@ export default function XrayInboundPage() {
     }
   };
 
-  if (!isAdmin && !xrayEnabled) {
+  if (!isAdmin && !vEnabled) {
     return (
       <div className="flex items-center justify-center h-64">
         <p className="text-muted-foreground">{t('xrayInbound.noPermission')}</p>

@@ -314,6 +314,8 @@ const en: Translations = {
     ipv6DockerDaemonDesc: 'Docker must be configured for IPv6 support first. Edit or create /etc/docker/daemon.json:',
     ipv6DockerRestart: 'Restart Docker to apply the configuration:',
     uninstallCommand: 'Uninstall Command',
+    disguiseName: 'Process Disguise',
+    xrayDisguiseName: 'Xray Disguise',
   },
   user: {
     title: 'User Management',

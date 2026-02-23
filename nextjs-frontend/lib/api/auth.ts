@@ -13,7 +13,7 @@ export interface LoginResponse {
   name: string;
   requirePasswordChange?: boolean;
   gost_enabled?: number;
-  xray_enabled?: number;
+  v_enabled?: number;
 }
 
 export const login = (data: LoginData) => post<LoginResponse>('/user/login', data);

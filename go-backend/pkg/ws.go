@@ -78,8 +78,8 @@ type NodeSystemInfo struct {
 	MemoryUsage      float64        `json:"memUsage"`
 	BytesReceived    uint64         `json:"bytesReceived"`
 	BytesTransmitted uint64         `json:"bytesTransmitted"`
-	XrayRunning      bool           `json:"xrayRunning"`
-	XrayVersion      string         `json:"xrayVersion"`
+	XrayRunning      bool           `json:"vRunning"`
+	XrayVersion      string         `json:"vVersion"`
 	Interfaces       []NetInterface `json:"interfaces"`
 	PanelAddr        string         `json:"panelAddr"`
 	Runtime          string         `json:"runtime"`
@@ -254,8 +254,8 @@ func (m *WSManager) readNodeMessages(nodeId int64, ns *NodeSession) {
 				MemoryUsage      float64 `json:"memory_usage"`
 				BytesReceived    uint64  `json:"bytes_received"`
 				BytesTransmitted uint64  `json:"bytes_transmitted"`
-				XrayRunning      bool    `json:"xray_running"`
-				XrayVersion      string  `json:"xray_version"`
+				XrayRunning      bool    `json:"v_running"`
+				XrayVersion      string  `json:"v_version"`
 				PanelAddr        string  `json:"panel_addr"`
 				Runtime          string  `json:"runtime"`
 				Interfaces       []struct {

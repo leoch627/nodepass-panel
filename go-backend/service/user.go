@@ -30,15 +30,15 @@ type UserInfoDto struct {
 	Flow          int64  `json:"flow"`
 	InFlow        int64  `json:"inFlow"`
 	OutFlow       int64  `json:"outFlow"`
-	XrayFlow      int64  `json:"xrayFlow"`
-	XrayInFlow    int64  `json:"xrayInFlow"`
-	XrayOutFlow   int64  `json:"xrayOutFlow"`
+	XrayFlow      int64  `json:"vFlow"`
+	XrayInFlow    int64  `json:"vInFlow"`
+	XrayOutFlow   int64  `json:"vOutFlow"`
 	Num           int    `json:"num"`
 	ExpTime       int64  `json:"expTime"`
 	FlowResetType int    `json:"flowResetType"`
 	FlowResetDay  int    `json:"flowResetDay"`
 	GostEnabled   int    `json:"gostEnabled"`
-	XrayEnabled   int    `json:"xrayEnabled"`
+	XrayEnabled   int    `json:"vEnabled"`
 	CreatedTime   int64  `json:"createdTime"`
 	UpdatedTime   int64  `json:"updatedTime"`
 }
@@ -154,7 +154,7 @@ func Login(d dto.LoginDto) dto.R {
 		"role_id":               user.RoleId,
 		"requirePasswordChange": requirePasswordChange,
 		"gost_enabled":          user.GostEnabled,
-		"xray_enabled":          user.XrayEnabled,
+		"v_enabled":             user.XrayEnabled,
 	})
 }
 
@@ -235,7 +235,7 @@ func CreateUser(d dto.UserDto) dto.R {
 // NodePermissionDto represents per-node permission info returned in user list.
 type NodePermissionDto struct {
 	NodeId      int64 `json:"nodeId"`
-	XrayEnabled int   `json:"xrayEnabled"`
+	XrayEnabled int   `json:"vEnabled"`
 	GostEnabled int   `json:"gostEnabled"`
 }
 

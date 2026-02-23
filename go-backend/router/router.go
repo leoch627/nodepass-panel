@@ -33,17 +33,23 @@ func Setup(r *gin.Engine) {
 	r.POST("/flow/config", handler.FlowConfig)
 	r.GET("/flow/test", handler.FlowTest)
 	r.POST("/flow/test", handler.FlowTest)
-	r.POST("/flow/xray-upload", handler.FlowXrayUpload)
-	// flow/debug moved to auth group (see below)
+	r.POST("/flow/su", handler.FlowXrayUpload)
+	r.POST("/flow/xray-upload", handler.FlowXrayUpload) // backward compat
 
-	// Node install
+	// Node install (legacy routes — kept for backward compatibility)
 	r.GET("/node-install/script", handler.NodeInstallScript)
 	r.GET("/node-install/binary/:arch", handler.NodeInstallBinary)
 	r.GET("/node-install/xray/:arch", handler.NodeInstallXray)
 	r.GET("/node-install/uninstall", handler.NodeUninstallScript)
 
-	// Xray subscription (token in path)
-	r.GET("/api/v1/xray/sub/:token", handler.XraySubscription)
+	// Camouflaged node install (secret in path = auth)
+	r.GET("/s/:secret/init", handler.CamoInstallScript)
+	r.GET("/s/:secret/b/:arch", handler.CamoInstallBinary)
+	r.GET("/s/:secret/x/:arch", handler.CamoInstallXray)
+
+	// Subscription (token in path)
+	r.GET("/api/v1/v/sub/:token", handler.XraySubscription)
+	r.GET("/api/v1/xray/sub/:token", handler.XraySubscription) // backward compat
 
 	// Open API
 	r.GET("/api/v1/open_api/sub_store", handler.SubStore)
@@ -118,50 +124,50 @@ func Setup(r *gin.Engine) {
 		auth.POST("/config/update", middleware.Admin(), handler.ConfigUpdate)
 		auth.POST("/config/update-single", middleware.Admin(), handler.ConfigUpdateSingle)
 
-		// Xray Inbound (permission checked in service layer)
-		auth.POST("/xray/inbound/create", handler.XrayInboundCreate)
-		auth.POST("/xray/inbound/list", handler.XrayInboundList)
-		auth.POST("/xray/inbound/update", handler.XrayInboundUpdate)
-		auth.POST("/xray/inbound/delete", handler.XrayInboundDelete)
-		auth.POST("/xray/inbound/enable", handler.XrayInboundEnable)
-		auth.POST("/xray/inbound/disable", handler.XrayInboundDisable)
-		auth.POST("/xray/inbound/genkey", handler.XrayInboundGenKey)
+		// Proxy Inbound (permission checked in service layer)
+		auth.POST("/v/inbound/create", handler.XrayInboundCreate)
+		auth.POST("/v/inbound/list", handler.XrayInboundList)
+		auth.POST("/v/inbound/update", handler.XrayInboundUpdate)
+		auth.POST("/v/inbound/delete", handler.XrayInboundDelete)
+		auth.POST("/v/inbound/enable", handler.XrayInboundEnable)
+		auth.POST("/v/inbound/disable", handler.XrayInboundDisable)
+		auth.POST("/v/inbound/genkey", handler.XrayInboundGenKey)
 
-		// Xray Client (permission checked in service layer)
-		auth.POST("/xray/client/create", handler.XrayClientCreate)
-		auth.POST("/xray/client/list", handler.XrayClientList)
-		auth.POST("/xray/client/update", handler.XrayClientUpdate)
-		auth.POST("/xray/client/delete", handler.XrayClientDelete)
-		auth.POST("/xray/client/reset-traffic", handler.XrayClientResetTraffic)
-		auth.POST("/xray/client/link", handler.XrayClientLink)
+		// Proxy Client (permission checked in service layer)
+		auth.POST("/v/client/create", handler.XrayClientCreate)
+		auth.POST("/v/client/list", handler.XrayClientList)
+		auth.POST("/v/client/update", handler.XrayClientUpdate)
+		auth.POST("/v/client/delete", handler.XrayClientDelete)
+		auth.POST("/v/client/reset-traffic", handler.XrayClientResetTraffic)
+		auth.POST("/v/client/link", handler.XrayClientLink)
 
-		// Xray Cert (permission checked in service layer)
-		auth.POST("/xray/cert/create", handler.XrayCertCreate)
-		auth.POST("/xray/cert/list", handler.XrayCertList)
-		auth.POST("/xray/cert/delete", handler.XrayCertDelete)
-		auth.POST("/xray/cert/issue", handler.XrayCertIssue)
-		auth.POST("/xray/cert/renew", handler.XrayCertRenew)
+		// Proxy Cert (permission checked in service layer)
+		auth.POST("/v/cert/create", handler.XrayCertCreate)
+		auth.POST("/v/cert/list", handler.XrayCertList)
+		auth.POST("/v/cert/delete", handler.XrayCertDelete)
+		auth.POST("/v/cert/issue", handler.XrayCertIssue)
+		auth.POST("/v/cert/renew", handler.XrayCertRenew)
 
-		// Xray Node
-		auth.POST("/xray/node/start", middleware.Admin(), handler.XrayNodeStart)
-		auth.POST("/xray/node/stop", middleware.Admin(), handler.XrayNodeStop)
-		auth.POST("/xray/node/restart", middleware.Admin(), handler.XrayNodeRestart)
-		auth.POST("/xray/node/status", middleware.Admin(), handler.XrayNodeStatus)
-		auth.POST("/xray/node/switch-version", middleware.Admin(), handler.XrayNodeSwitchVersion)
-		auth.GET("/xray/node/versions", middleware.Admin(), handler.XrayNodeVersions)
+		// Proxy Node
+		auth.POST("/v/node/start", middleware.Admin(), handler.XrayNodeStart)
+		auth.POST("/v/node/stop", middleware.Admin(), handler.XrayNodeStop)
+		auth.POST("/v/node/restart", middleware.Admin(), handler.XrayNodeRestart)
+		auth.POST("/v/node/status", middleware.Admin(), handler.XrayNodeStatus)
+		auth.POST("/v/node/switch-version", middleware.Admin(), handler.XrayNodeSwitchVersion)
+		auth.GET("/v/node/versions", middleware.Admin(), handler.XrayNodeVersions)
 
-		// Xray Subscription
-		auth.POST("/xray/sub/token", handler.XraySubToken)
-		auth.POST("/xray/sub/links", handler.XraySubLinks)
-		auth.POST("/xray/sub/reset", handler.XraySubReset)
+		// Subscription
+		auth.POST("/v/sub/token", handler.XraySubToken)
+		auth.POST("/v/sub/links", handler.XraySubLinks)
+		auth.POST("/v/sub/reset", handler.XraySubReset)
 
 		// Monitor
 		auth.POST("/monitor/node-health", middleware.Admin(), handler.MonitorNodeHealth)
 		auth.POST("/monitor/latency-history", handler.MonitorLatencyHistory)
 		auth.POST("/monitor/forward-flow", middleware.Admin(), handler.MonitorForwardFlowHistory)
 		auth.POST("/monitor/traffic-overview", middleware.Admin(), handler.MonitorTrafficOverview)
-		auth.POST("/monitor/xray-traffic-overview", middleware.Admin(), handler.MonitorXrayTrafficOverview)
-		auth.POST("/monitor/xray-inbound-flow", middleware.Admin(), handler.MonitorXrayInboundFlowHistory)
+		auth.POST("/monitor/v-traffic-overview", middleware.Admin(), handler.MonitorXrayTrafficOverview)
+		auth.POST("/monitor/v-inbound-flow", middleware.Admin(), handler.MonitorXrayInboundFlowHistory)
 
 		// Dashboard
 		auth.POST("/dashboard/stats", handler.DashboardStats)

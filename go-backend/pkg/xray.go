@@ -6,19 +6,19 @@ import (
 )
 
 func XrayStart(nodeId int64) *dto.GostResponse {
-	return WS.SendMsg(nodeId, map[string]interface{}{}, "XrayStart")
+	return WS.SendMsg(nodeId, map[string]interface{}{}, "VStart")
 }
 
 func XrayStop(nodeId int64) *dto.GostResponse {
-	return WS.SendMsg(nodeId, map[string]interface{}{}, "XrayStop")
+	return WS.SendMsg(nodeId, map[string]interface{}{}, "VStop")
 }
 
 func XrayRestart(nodeId int64) *dto.GostResponse {
-	return WS.SendMsg(nodeId, map[string]interface{}{}, "XrayRestart")
+	return WS.SendMsg(nodeId, map[string]interface{}{}, "VRestart")
 }
 
 func XrayStatus(nodeId int64) *dto.GostResponse {
-	return WS.SendMsg(nodeId, map[string]interface{}{}, "XrayStatus")
+	return WS.SendMsg(nodeId, map[string]interface{}{}, "VStatus")
 }
 
 func XrayAddInbound(nodeId int64, inbound *model.XrayInbound) *dto.GostResponse {
@@ -31,14 +31,14 @@ func XrayAddInbound(nodeId int64, inbound *model.XrayInbound) *dto.GostResponse 
 		"streamSettingsJson": inbound.StreamSettingsJson,
 		"sniffingJson":       inbound.SniffingJson,
 	}
-	return WS.SendMsg(nodeId, data, "XrayAddInbound")
+	return WS.SendMsg(nodeId, data, "VAddInbound")
 }
 
 func XrayRemoveInbound(nodeId int64, tag string) *dto.GostResponse {
 	data := map[string]interface{}{
 		"tag": tag,
 	}
-	return WS.SendMsg(nodeId, data, "XrayRemoveInbound")
+	return WS.SendMsg(nodeId, data, "VRemoveInbound")
 }
 
 func XrayAddClient(nodeId int64, inboundTag, email, uuidOrPassword, flow string, alterId int, protocol string) *dto.GostResponse {
@@ -50,7 +50,7 @@ func XrayAddClient(nodeId int64, inboundTag, email, uuidOrPassword, flow string,
 		"alterId":        alterId,
 		"protocol":       protocol,
 	}
-	return WS.SendMsg(nodeId, data, "XrayAddClient")
+	return WS.SendMsg(nodeId, data, "VAddClient")
 }
 
 func XrayRemoveClient(nodeId int64, inboundTag, email string) *dto.GostResponse {
@@ -58,14 +58,14 @@ func XrayRemoveClient(nodeId int64, inboundTag, email string) *dto.GostResponse 
 		"inboundTag": inboundTag,
 		"email":      email,
 	}
-	return WS.SendMsg(nodeId, data, "XrayRemoveClient")
+	return WS.SendMsg(nodeId, data, "VRemoveClient")
 }
 
 func XrayGetTraffic(nodeId int64) *dto.GostResponse {
 	data := map[string]interface{}{
 		"reset": true,
 	}
-	return WS.SendMsg(nodeId, data, "XrayGetTraffic")
+	return WS.SendMsg(nodeId, data, "VGetTraffic")
 }
 
 func XrayApplyConfig(nodeId int64, inbounds []model.XrayInbound) *dto.GostResponse {
@@ -84,12 +84,12 @@ func XrayApplyConfig(nodeId int64, inbounds []model.XrayInbound) *dto.GostRespon
 	data := map[string]interface{}{
 		"inbounds": arr,
 	}
-	return WS.SendMsg(nodeId, data, "XrayApplyConfig")
+	return WS.SendMsg(nodeId, data, "VApplyConfig")
 }
 
 func XraySwitchVersion(nodeId int64, version string) *dto.GostResponse {
 	data := map[string]interface{}{"version": version}
-	return WS.SendMsg(nodeId, data, "XraySwitchVersion")
+	return WS.SendMsg(nodeId, data, "VSwitchVersion")
 }
 
 func XrayDeployCert(nodeId int64, domain, publicKey, privateKey string) *dto.GostResponse {
@@ -98,5 +98,5 @@ func XrayDeployCert(nodeId int64, domain, publicKey, privateKey string) *dto.Gos
 		"publicKey":  publicKey,
 		"privateKey": privateKey,
 	}
-	return WS.SendMsg(nodeId, data, "XrayDeployCert")
+	return WS.SendMsg(nodeId, data, "VDeployCert")
 }

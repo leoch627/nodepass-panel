@@ -213,7 +213,7 @@ func SelfUpdate() dto.R {
 	// - sed replaces image version tags in docker-compose.yml
 	// - docker compose pull + up -d restarts with new images
 	// This avoids needing a bind mount on the backend container.
-	sedCmd := fmt.Sprintf(`sed -i 's|\(0xnetuser/[^:]*:\)[^ "]*|\1%s|g' docker-compose.yml`, latestVersion)
+	sedCmd := fmt.Sprintf(`sed -i 's|\(0xnetuser/[^:]*:\)[^ "]*|\1%s|g' docker-compose.yml && sed -i 's|gost-binary-init|node-binary-init|g; s|gost-binary:|node-binary:|g; s|gost-node:|node:|g; s|gost-network|flux-network|g; s|gost-mysql|flux-mysql|g' docker-compose.yml`, latestVersion)
 	// Mount host compose dir at the SAME path inside the updater container.
 	// This ensures `docker compose up -d` sets the working_dir label to the
 	// real host path, so subsequent updates can find the compose file.

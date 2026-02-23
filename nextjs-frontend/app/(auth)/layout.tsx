@@ -46,11 +46,11 @@ const navItems: NavItem[] = [
   { path: '/config', labelKey: 'nav.config', icon: <Settings className="h-4 w-4" />, adminOnly: true, section: 'system', sectionKey: 'nav.system' },
 ];
 
-function SidebarContent({ pathname, isAdmin, gostEnabled, xrayEnabled, onNavigate, version, t, siteName }: {
+function SidebarContent({ pathname, isAdmin, gostEnabled, vEnabled, onNavigate, version, t, siteName }: {
   pathname: string;
   isAdmin: boolean;
   gostEnabled: boolean;
-  xrayEnabled: boolean;
+  vEnabled: boolean;
   onNavigate: (path: string) => void;
   version: string;
   t: (key: string, vars?: Record<string, string | number>) => string;
@@ -59,7 +59,7 @@ function SidebarContent({ pathname, isAdmin, gostEnabled, xrayEnabled, onNavigat
   const filtered = navItems.filter(item => {
     if (item.adminOnly && !isAdmin) return false;
     if (item.section === 'GOST' && !isAdmin && !gostEnabled) return false;
-    if (item.section === 'Xray' && !isAdmin && !xrayEnabled) return false;
+    if (item.section === 'Xray' && !isAdmin && !vEnabled) return false;
     return true;
   });
   let lastSection = '';
@@ -118,7 +118,7 @@ function SidebarContent({ pathname, isAdmin, gostEnabled, xrayEnabled, onNavigat
 }
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isAdmin, username, gostEnabled, xrayEnabled, loading } = useAuth();
+  const { isAuthenticated, isAdmin, username, gostEnabled, vEnabled, loading } = useAuth();
   const isMobile = useIsMobile();
   const { t } = useTranslation();
   const { siteName } = useSiteConfig();
@@ -158,7 +158,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       {/* Desktop sidebar */}
       {!isMobile && (
         <aside className="w-64 border-r bg-card flex-shrink-0">
-          <SidebarContent pathname={pathname} isAdmin={isAdmin} gostEnabled={gostEnabled} xrayEnabled={xrayEnabled} onNavigate={handleNavigate} version={panelVersion} t={t} siteName={siteName} />
+          <SidebarContent pathname={pathname} isAdmin={isAdmin} gostEnabled={gostEnabled} vEnabled={vEnabled} onNavigate={handleNavigate} version={panelVersion} t={t} siteName={siteName} />
         </aside>
       )}
 
@@ -175,7 +175,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
                   </Button>
                 </SheetTrigger>
                 <SheetContent side="left" className="w-64 p-0">
-                  <SidebarContent pathname={pathname} isAdmin={isAdmin} gostEnabled={gostEnabled} xrayEnabled={xrayEnabled} onNavigate={handleNavigate} version={panelVersion} t={t} siteName={siteName} />
+                  <SidebarContent pathname={pathname} isAdmin={isAdmin} gostEnabled={gostEnabled} vEnabled={vEnabled} onNavigate={handleNavigate} version={panelVersion} t={t} siteName={siteName} />
                 </SheetContent>
               </Sheet>
             )}

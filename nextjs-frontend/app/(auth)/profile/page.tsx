@@ -48,8 +48,8 @@ export default function ProfilePage() {
   const gostUsed = packageInfo ? (packageInfo.inFlow || 0) + (packageInfo.outFlow || 0) : 0;
   const gostTotal = packageInfo?.flow ? packageInfo.flow * 1024 * 1024 * 1024 : 0;
   const gostPercent = gostTotal > 0 ? Math.min((gostUsed / gostTotal) * 100, 100) : 0;
-  const xrayUsed = packageInfo ? (packageInfo.xrayInFlow || 0) + (packageInfo.xrayOutFlow || 0) : 0;
-  const xrayTotal = packageInfo?.xrayFlow ? packageInfo.xrayFlow * 1024 * 1024 * 1024 : 0;
+  const xrayUsed = packageInfo ? (packageInfo.vInFlow || 0) + (packageInfo.vOutFlow || 0) : 0;
+  const xrayTotal = packageInfo?.vFlow ? packageInfo.vFlow * 1024 * 1024 * 1024 : 0;
   const xrayPercent = xrayTotal > 0 ? Math.min((xrayUsed / xrayTotal) * 100, 100) : 0;
   const isExpired = packageInfo?.expTime && new Date(packageInfo.expTime) < new Date();
   const isGostOver = gostTotal > 0 && gostUsed >= gostTotal;
@@ -144,7 +144,7 @@ export default function ProfilePage() {
             </div>
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground">{t('profile.totalTraffic')}</span>
-              <span className="font-medium">{packageInfo?.xrayFlow ? `${packageInfo.xrayFlow} GB` : t('common.unlimited')}</span>
+              <span className="font-medium">{packageInfo?.vFlow ? `${packageInfo.vFlow} GB` : t('common.unlimited')}</span>
             </div>
             {xrayTotal > 0 && (
               <div className="space-y-1">
@@ -162,11 +162,11 @@ export default function ProfilePage() {
             )}
             <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground">{t('profile.upload')}</span>
-              <span>{formatBytes(packageInfo?.xrayInFlow || 0)}</span>
+              <span>{formatBytes(packageInfo?.vInFlow || 0)}</span>
             </div>
             <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground">{t('profile.download')}</span>
-              <span>{formatBytes(packageInfo?.xrayOutFlow || 0)}</span>
+              <span>{formatBytes(packageInfo?.vOutFlow || 0)}</span>
             </div>
           </CardContent>
         </Card>

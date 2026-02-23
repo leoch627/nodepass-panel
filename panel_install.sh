@@ -279,8 +279,8 @@ update_panel() {
   # 检查数据库容器健康状态
   echo "🔍 检查数据库服务状态..."
   for i in {1..60}; do
-    if docker ps --format "{{.Names}}" | grep -q "^gost-mysql$"; then
-      DB_HEALTH=$(docker inspect -f '{{.State.Health.Status}}' gost-mysql 2>/dev/null || echo "unknown")
+    if docker ps --format "{{.Names}}" | grep -q "^flux-mysql$"; then
+      DB_HEALTH=$(docker inspect -f '{{.State.Health.Status}}' flux-mysql 2>/dev/null || echo "unknown")
       if [[ "$DB_HEALTH" == "healthy" ]]; then
         echo "✅ 数据库服务健康检查通过"
         break
@@ -296,7 +296,7 @@ update_panel() {
     fi
     if [ $i -eq 60 ]; then
       echo "❌ 数据库服务启动超时（60秒）"
-      echo "🔍 当前状态：$(docker inspect -f '{{.State.Health.Status}}' gost-mysql 2>/dev/null || echo '容器不存在')"
+      echo "🔍 当前状态：$(docker inspect -f '{{.State.Health.Status}}' flux-mysql 2>/dev/null || echo '容器不存在')"
       echo "🛑 更新终止"
       return 1
     fi
@@ -432,8 +432,8 @@ UPDATE \`statistics_flow\` SET \`created_time\` = UNIX_TIMESTAMP() * 1000 WHERE 
 EOF
 
   # 检查数据库容器
-  if ! docker ps --format "{{.Names}}" | grep -q "^gost-mysql$"; then
-    echo "❌ 数据库容器 gost-mysql 未运行"
+  if ! docker ps --format "{{.Names}}" | grep -q "^flux-mysql$"; then
+    echo "❌ 数据库容器 flux-mysql 未运行"
     echo "🔍 当前运行的容器："
     docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
     echo "❌ 数据库结构更新失败，请手动执行 temp_migration.sql"
@@ -442,16 +442,16 @@ EOF
   fi
 
   # 执行数据库迁移
-  if docker exec -i gost-mysql mysql -u "$DB_USER" -p"$DB_PASSWORD" < temp_migration.sql 2>/dev/null; then
+  if docker exec -i flux-mysql mysql -u "$DB_USER" -p"$DB_PASSWORD" < temp_migration.sql 2>/dev/null; then
     echo "✅ 数据库结构更新完成"
   else
     echo "⚠️ 使用用户密码失败，尝试root密码..."
-    if docker exec -i gost-mysql mysql -u root -p"$DB_PASSWORD" < temp_migration.sql 2>/dev/null; then
+    if docker exec -i flux-mysql mysql -u root -p"$DB_PASSWORD" < temp_migration.sql 2>/dev/null; then
       echo "✅ 数据库结构更新完成"
     else
       echo "❌ 数据库结构更新失败，请手动执行 temp_migration.sql"
       echo "📁 迁移文件已保存为 temp_migration.sql"
-      echo "🔍 数据库容器状态: $(docker inspect -f '{{.State.Status}}' gost-mysql 2>/dev/null || echo '容器不存在')"
+      echo "🔍 数据库容器状态: $(docker inspect -f '{{.State.Status}}' flux-mysql 2>/dev/null || echo '容器不存在')"
       echo "🛑 更新终止"
       return 1
     fi
@@ -532,7 +532,7 @@ export_migration_sql() {
   echo "   用户名: $DB_USER"
 
   # 检查数据库容器是否运行
-  if ! docker ps --format "{{.Names}}" | grep -q "^gost-mysql$"; then
+  if ! docker ps --format "{{.Names}}" | grep -q "^flux-mysql$"; then
     echo "❌ 数据库容器未运行，无法导出数据"
     echo "🔍 当前运行的容器："
     docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
@@ -545,11 +545,11 @@ export_migration_sql() {
 
   # 使用 mysqldump 导出数据库
   echo "⏳ 正在导出数据库..."
-  if docker exec gost-mysql mysqldump -u "$DB_USER" -p"$DB_PASSWORD" --single-transaction --routines --triggers "$DB_NAME" > "$SQL_FILE" 2>/dev/null; then
+  if docker exec flux-mysql mysqldump -u "$DB_USER" -p"$DB_PASSWORD" --single-transaction --routines --triggers "$DB_NAME" > "$SQL_FILE" 2>/dev/null; then
     echo "✅ 数据库导出成功"
   else
     echo "⚠️ 使用用户密码失败，尝试root密码..."
-    if docker exec gost-mysql mysqldump -u root -p"$DB_PASSWORD" --single-transaction --routines --triggers "$DB_NAME" > "$SQL_FILE" 2>/dev/null; then
+    if docker exec flux-mysql mysqldump -u root -p"$DB_PASSWORD" --single-transaction --routines --triggers "$DB_NAME" > "$SQL_FILE" 2>/dev/null; then
       echo "✅ 数据库导出成功"
     else
       echo "❌ 数据库导出失败"

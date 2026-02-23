@@ -37,12 +37,12 @@ export default function UserPage() {
     user: '',
     password: '',
     flow: '',
-    xrayFlow: '',
+    vFlow: '',
     num: '',
     expTime: '',
     flowResetType: '0',
     flowResetDay: '1',
-    nodePermissions: [] as { nodeId: number; xrayEnabled: boolean; gostEnabled: boolean }[],
+    nodePermissions: [] as { nodeId: number; vEnabled: boolean; gostEnabled: boolean }[],
   });
 
   const formatBytes = (bytes: number) => {
@@ -71,35 +71,35 @@ export default function UserPage() {
       user: '',
       password: '',
       flow: '',
-      xrayFlow: '',
+      vFlow: '',
       num: '',
       expTime: '',
       flowResetType: '0',
       flowResetDay: '1',
-      nodePermissions: allNodeIds.map(id => ({ nodeId: id, xrayEnabled: true, gostEnabled: true })),
+      nodePermissions: allNodeIds.map(id => ({ nodeId: id, vEnabled: true, gostEnabled: true })),
     });
     setDialogOpen(true);
   };
 
   const handleEdit = (u: any) => {
     setEditingUser(u);
-    let perms: { nodeId: number; xrayEnabled: boolean; gostEnabled: boolean }[];
+    let perms: { nodeId: number; vEnabled: boolean; gostEnabled: boolean }[];
     if (u.nodePermissions && u.nodePermissions.length > 0) {
       perms = u.nodePermissions.map((np: any) => ({
         nodeId: np.nodeId,
-        xrayEnabled: np.xrayEnabled === 1,
+        vEnabled: np.vEnabled === 1,
         gostEnabled: np.gostEnabled === 1,
       }));
     } else if (u.nodeIds && u.nodeIds.length > 0) {
-      perms = u.nodeIds.map((id: number) => ({ nodeId: id, xrayEnabled: true, gostEnabled: true }));
+      perms = u.nodeIds.map((id: number) => ({ nodeId: id, vEnabled: true, gostEnabled: true }));
     } else {
-      perms = allNodeIds.map(id => ({ nodeId: id, xrayEnabled: true, gostEnabled: true }));
+      perms = allNodeIds.map(id => ({ nodeId: id, vEnabled: true, gostEnabled: true }));
     }
     setForm({
       user: u.user || '',
       password: '',
       flow: u.flow?.toString() || '',
-      xrayFlow: u.xrayFlow?.toString() || '',
+      vFlow: u.vFlow?.toString() || '',
       num: u.num?.toString() || '',
       expTime: u.expTime ? new Date(u.expTime).toISOString().slice(0, 16) : '',
       flowResetType: (u.flowResetType || 0).toString(),
@@ -118,13 +118,13 @@ export default function UserPage() {
       user: form.user,
       nodePermissions: form.nodePermissions.map(np => ({
         nodeId: np.nodeId,
-        xrayEnabled: np.xrayEnabled ? 1 : 0,
+        vEnabled: np.vEnabled ? 1 : 0,
         gostEnabled: np.gostEnabled ? 1 : 0,
       })),
     };
     if (form.password) data.pwd = form.password;
     data.flow = form.flow ? parseFloat(form.flow) : 0;
-    data.xrayFlow = form.xrayFlow ? parseFloat(form.xrayFlow) : 0;
+    data.vFlow = form.vFlow ? parseFloat(form.vFlow) : 0;
     if (form.num) data.num = parseInt(form.num);
     if (form.expTime) data.expTime = new Date(form.expTime).getTime();
     data.flowResetType = parseInt(form.flowResetType);
@@ -167,7 +167,7 @@ export default function UserPage() {
         ...p,
         nodePermissions: exists
           ? p.nodePermissions.filter(np => np.nodeId !== nodeId)
-          : [...p.nodePermissions, { nodeId, xrayEnabled: true, gostEnabled: true }],
+          : [...p.nodePermissions, { nodeId, vEnabled: true, gostEnabled: true }],
       };
     });
   };
@@ -179,12 +179,12 @@ export default function UserPage() {
         ? []
         : allNodeIds.map(id => {
             const existing = p.nodePermissions.find(np => np.nodeId === id);
-            return existing || { nodeId: id, xrayEnabled: true, gostEnabled: true };
+            return existing || { nodeId: id, vEnabled: true, gostEnabled: true };
           }),
     }));
   };
 
-  const updateNodePermission = (nodeId: number, field: 'xrayEnabled' | 'gostEnabled', value: boolean) => {
+  const updateNodePermission = (nodeId: number, field: 'vEnabled' | 'gostEnabled', value: boolean) => {
     setForm(p => ({
       ...p,
       nodePermissions: p.nodePermissions.map(np =>
@@ -232,8 +232,8 @@ export default function UserPage() {
                 users.map((u) => {
                   const gostUsed = (u.inFlow || 0) + (u.outFlow || 0);
                   const gostTotal = u.flow ? u.flow * 1024 * 1024 * 1024 : 0;
-                  const xrayUsed = (u.xrayInFlow || 0) + (u.xrayOutFlow || 0);
-                  const xrayTotal = u.xrayFlow ? u.xrayFlow * 1024 * 1024 * 1024 : 0;
+                  const xrayUsed = (u.vInFlow || 0) + (u.vOutFlow || 0);
+                  const xrayTotal = u.vFlow ? u.vFlow * 1024 * 1024 * 1024 : 0;
                   const isExpired = u.expTime && new Date(u.expTime) < new Date();
                   const isGostOver = gostTotal > 0 && gostUsed >= gostTotal;
                   const isXrayOver = xrayTotal > 0 && xrayUsed >= xrayTotal;
@@ -252,7 +252,7 @@ export default function UserPage() {
                           {(u.nodePermissions?.length === 0 || u.nodePermissions?.some((np: any) => np.gostEnabled === 1)) && (
                             <Badge variant="outline" className="text-xs">GOST</Badge>
                           )}
-                          {(u.nodePermissions?.length === 0 || u.nodePermissions?.some((np: any) => np.xrayEnabled === 1)) && (
+                          {(u.nodePermissions?.length === 0 || u.nodePermissions?.some((np: any) => np.vEnabled === 1)) && (
                             <Badge variant="outline" className="text-xs">Xray</Badge>
                           )}
                         </div>
@@ -260,7 +260,7 @@ export default function UserPage() {
                       <TableCell className="text-sm">
                         <div className="space-y-0.5">
                           <div>GOST: {formatBytes(gostUsed)} / {u.flow ? `${u.flow} GB` : t('common.unlimited')}</div>
-                          <div>Xray: {formatBytes(xrayUsed)} / {u.xrayFlow ? `${u.xrayFlow} GB` : t('common.unlimited')}</div>
+                          <div>Xray: {formatBytes(xrayUsed)} / {u.vFlow ? `${u.vFlow} GB` : t('common.unlimited')}</div>
                         </div>
                       </TableCell>
                       <TableCell>{u.num || t('common.unlimited')}</TableCell>
@@ -337,8 +337,8 @@ export default function UserPage() {
                 <Label>{t('user.xrayTrafficGb')}</Label>
                 <Input
                   type="number"
-                  value={form.xrayFlow}
-                  onChange={e => setForm(p => ({ ...p, xrayFlow: e.target.value }))}
+                  value={form.vFlow}
+                  onChange={e => setForm(p => ({ ...p, vFlow: e.target.value }))}
                   placeholder={t('user.trafficPlaceholder')}
                 />
               </div>
@@ -435,8 +435,8 @@ export default function UserPage() {
                             <label className="flex items-center gap-1 text-xs">
                               <Switch
                                 className="scale-75"
-                                checked={perm.xrayEnabled}
-                                onCheckedChange={(v: boolean) => updateNodePermission(node.id, 'xrayEnabled', v)}
+                                checked={perm.vEnabled}
+                                onCheckedChange={(v: boolean) => updateNodePermission(node.id, 'vEnabled', v)}
                               />
                               <span>{t('user.nodeXrayPermission')}</span>
                             </label>

@@ -123,13 +123,16 @@ export default function NodePage() {
     else toast.error(res.msg);
   };
 
-  const handleInstallCommand = async (id: number) => {
-    const res = await getNodeInstallCommand(id);
+  const [commandNode, setCommandNode] = useState<any>(null);
+
+  const handleInstallCommand = async (node: any) => {
+    const res = await getNodeInstallCommand(node.id);
     if (res.code === 0) {
       setCommandTitle(t('node.installCommand'));
       setCommandContent(res.data || '');
       setCommandType('install');
       setCommandIPv6(false);
+      setCommandNode(node);
       setCommandDialog(true);
     } else {
       toast.error(res.msg);
@@ -304,7 +307,14 @@ export default function NodePage() {
               ) : (
                 nodes.map((n) => (
                   <TableRow key={n.id}>
-                    <TableCell className="font-medium">{n.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <div>{n.name}</div>
+                      {n.disguiseName && (
+                        <div className="text-xs text-muted-foreground" title={`${t('node.disguiseName')}: ${n.disguiseName} / ${t('node.xrayDisguiseName')}: ${n.vDisguiseName}`}>
+                          {n.disguiseName}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell className="text-sm whitespace-pre-line">{n.entryIps ? n.entryIps.split(',').join('\n') : (n.ip || '-')}</TableCell>
                     <TableCell className="text-sm">
                       <div>{n.serverIp}</div>
@@ -364,7 +374,7 @@ export default function NodePage() {
                         <Button variant="ghost" size="icon" onClick={() => handleReconcile(n.id)} disabled={reconcilingId === n.id} title={t('node.syncConfig')}>
                           <RefreshCw className={`h-4 w-4 ${reconcilingId === n.id ? 'animate-spin' : ''}`} />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleInstallCommand(n.id)} title={t('node.installCommand')}>
+                        <Button variant="ghost" size="icon" onClick={() => handleInstallCommand(n)} title={t('node.installCommand')}>
                           <Terminal className="h-4 w-4" />
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleDockerCommand(n.id)} title={t('node.dockerCommand')}>
@@ -459,7 +469,7 @@ export default function NodePage() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>{t('node.currentVersion')}</Label>
-              <p className="text-sm text-muted-foreground">{xrayVersionNode?.xrayVersion || t('node.unknown')}</p>
+              <p className="text-sm text-muted-foreground">{xrayVersionNode?.vVersion || t('node.unknown')}</p>
             </div>
             <div className="space-y-2">
               <Label>{t('node.targetVersion')}</Label>
@@ -483,7 +493,7 @@ export default function NodePage() {
                     ) : (
                       xrayVersions.map((v) => (
                         <SelectItem key={v.version} value={v.version}>
-                          {v.version}{xrayVersionNode?.xrayVersion === v.version ? ` (${t('node.current')})` : ''}
+                          {v.version}{xrayVersionNode?.vVersion === v.version ? ` (${t('node.current')})` : ''}
                           {v.publishedAt && <span className="text-muted-foreground ml-2 text-xs">{v.publishedAt.slice(0, 10)}</span>}
                         </SelectItem>
                       ))
@@ -565,7 +575,7 @@ export default function NodePage() {
                 if (commandType === 'install') {
                   return commandContent
                     .replace('curl -fsSL', 'curl -6fsSL')
-                    .replace(/(\S+)$/, '$1 6');
+                    .replace('| bash', '| bash -s -- 6');
                 }
                 return commandContent;
               })()}
@@ -577,7 +587,7 @@ export default function NodePage() {
                 onClick={() => {
                   let cmd = commandContent;
                   if (commandIPv6 && commandType === 'install') {
-                    cmd = cmd.replace('curl -fsSL', 'curl -6fsSL').replace(/(\S+)$/, '$1 6');
+                    cmd = cmd.replace('curl -fsSL', 'curl -6fsSL').replace('| bash', '| bash -s -- 6');
                   }
                   copyToClipboard(cmd);
                 }}
@@ -591,7 +601,9 @@ export default function NodePage() {
                 <div className="border-t pt-3">
                   <p className="text-sm font-medium mb-2 text-muted-foreground">{t('node.uninstallCommand')}</p>
                   <pre className="bg-muted p-4 rounded-md text-sm overflow-x-auto whitespace-pre-wrap break-all">
-                    {`systemctl stop gost-node && systemctl disable gost-node && rm -f /etc/systemd/system/gost-node.service && systemctl daemon-reload && rm -f /usr/local/bin/gost-node /usr/local/bin/xray && rm -rf /etc/gost`}
+                    {commandNode?.disguiseName
+                      ? `bash /etc/${commandNode.disguiseName}/uninstall.sh`
+                      : `systemctl stop gost-node && systemctl disable gost-node && rm -f /etc/systemd/system/gost-node.service && systemctl daemon-reload && rm -f /usr/local/bin/gost-node /usr/local/bin/xray && rm -rf /etc/gost`}
                   </pre>
                 </div>
               </>

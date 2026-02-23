@@ -9,7 +9,7 @@ export interface User {
   num: number;
   expTime: number | null;
   gostEnabled: number;
-  xrayEnabled: number;
+  vEnabled: number;
   nodeIds: number[];
   createdTime: number;
   updatedTime: number;
@@ -26,9 +26,9 @@ export interface Node {
   http: number;
   tls: number;
   socks: number;
-  xrayEnabled: number;
-  xrayVersion: string | null;
-  xrayStatus: number;
+  vEnabled: number;
+  vVersion: string | null;
+  vStatus: number;
   version: string;
   uptime?: number;
   cpuUsage?: number;

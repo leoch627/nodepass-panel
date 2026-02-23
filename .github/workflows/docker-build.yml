@@ -2,7 +2,7 @@ name: Build and Push Images Based on Version
 
 # 在这里定义统一版本号
 env:
-  VERSION: "2.0.26"
+  VERSION: "2.1.0"
 
 on:
   push:
@@ -17,7 +17,7 @@ jobs:
     outputs:
       version: ${{ env.VERSION }}
       should_build: ${{ steps.check-tag.outputs.should_build }}
-      should_build_gost: ${{ steps.check-tag.outputs.should_build_gost }}
+      should_build_node: ${{ steps.check-tag.outputs.should_build_node }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -39,29 +39,29 @@ jobs:
             echo "Tag commit: $TAG_COMMIT"
             echo "Current HEAD: $(git rev-parse HEAD)"
 
-            if git diff --quiet --ignore-all-space --ignore-blank-lines $TAG_COMMIT HEAD -- go-gost/ 2>/dev/null; then
-              echo "✅ GOST files unchanged since tag (no content changes)"
-              echo "should_build_gost=false" >> $GITHUB_OUTPUT
+            if git diff --quiet --ignore-all-space --ignore-blank-lines $TAG_COMMIT HEAD -- go-node/ 2>/dev/null; then
+              echo "✅ Node files unchanged since tag (no content changes)"
+              echo "should_build_node=false" >> $GITHUB_OUTPUT
             else
-              echo "🔄 Detected changes in go-gost directory:"
-              git diff --stat $TAG_COMMIT HEAD -- go-gost/ || true
-              echo "should_build_gost=true" >> $GITHUB_OUTPUT
+              echo "🔄 Detected changes in go-node directory:"
+              git diff --stat $TAG_COMMIT HEAD -- go-node/ || true
+              echo "should_build_node=true" >> $GITHUB_OUTPUT
             fi
           else
             echo "Tag ${{ env.VERSION }} does not exist, will build all components"
             echo "should_build=true" >> $GITHUB_OUTPUT
-            echo "should_build_gost=true" >> $GITHUB_OUTPUT
+            echo "should_build_node=true" >> $GITHUB_OUTPUT
             echo "tag_exists=false" >> $GITHUB_OUTPUT
           fi
 
   # ============================================================
-  # 原生编译阶段 — 在宿主机直接编译，避免 QEMU 模拟
+  # Build stage — compile on host, avoid QEMU emulation
   # ============================================================
 
-  build-gost:
-    name: Build & Compress GOST Binary
+  build-node:
+    name: Build & Compress Node Binary
     needs: check-version
-    if: needs.check-version.outputs.should_build_gost == 'true'
+    if: needs.check-version.outputs.should_build_node == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -77,9 +77,9 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: ${{ runner.os }}-go-gost-${{ hashFiles('go-gost/go.sum') }}
+          key: ${{ runner.os }}-go-node-${{ hashFiles('go-node/go.sum') }}
           restore-keys: |
-            ${{ runner.os }}-go-gost-
+            ${{ runner.os }}-go-node-
 
       - name: Install UPX
         run: |
@@ -88,33 +88,33 @@ jobs:
           sudo mv upx-4.2.1-amd64_linux/upx /usr/local/bin/
           rm -rf upx-4.2.1-amd64_linux*
 
-      - name: Build GOST binary (AMD64)
-        working-directory: ./go-gost
-        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.nodeVersion=${{ env.VERSION }}" -o gost-amd64
+      - name: Build node binary (AMD64)
+        working-directory: ./go-node
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.nodeVersion=${{ env.VERSION }}" -o node-amd64
 
-      - name: Build GOST binary (ARM64)
-        working-directory: ./go-gost
-        run: CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.nodeVersion=${{ env.VERSION }}" -o gost-arm64
+      - name: Build node binary (ARM64)
+        working-directory: ./go-node
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.nodeVersion=${{ env.VERSION }}" -o node-arm64
 
       - name: Compress with UPX (AMD64)
-        working-directory: ./go-gost
-        run: upx --best --lzma gost-amd64
+        working-directory: ./go-node
+        run: upx --best --lzma node-amd64
 
       - name: Compress with UPX (ARM64)
-        working-directory: ./go-gost
-        run: upx --best --lzma gost-arm64
+        working-directory: ./go-node
+        run: upx --best --lzma node-arm64
 
-      - name: Upload GOST AMD64 artifact
+      - name: Upload Node AMD64 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gost-binary-amd64
-          path: ./go-gost/gost-amd64
+          name: node-binary-amd64
+          path: ./go-node/node-amd64
 
-      - name: Upload GOST ARM64 artifact
+      - name: Upload Node ARM64 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gost-binary-arm64
-          path: ./go-gost/gost-arm64
+          name: node-binary-arm64
+          path: ./go-node/node-arm64
 
   build-go-backend-binary:
     name: Build Go Backend Binary
@@ -189,7 +189,7 @@ jobs:
           path: ./nextjs-frontend/out
 
   # ============================================================
-  # Docker 镜像构建阶段 — 只做 COPY，不再编译
+  # Docker image build stage — COPY only, no compilation
   # ============================================================
 
   build-nextjs-frontend:
@@ -268,25 +268,25 @@ jobs:
             -t 0xnetuser/go-backend:${VERSION} \
             ./go-backend
 
-  build-gost-node:
-    name: Build & Push GOST Node Image
-    needs: [check-version, build-gost]
-    if: needs.check-version.outputs.should_build_gost == 'true'
+  build-node-image:
+    name: Build & Push Node Image
+    needs: [check-version, build-node]
+    if: needs.check-version.outputs.should_build_node == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
-      - name: Download GOST AMD64 binary
+      - name: Download Node AMD64 binary
         uses: actions/download-artifact@v4
         with:
-          name: gost-binary-amd64
-          path: ./go-gost
+          name: node-binary-amd64
+          path: ./go-node
 
-      - name: Download GOST ARM64 binary
+      - name: Download Node ARM64 binary
         uses: actions/download-artifact@v4
         with:
-          name: gost-binary-arm64
-          path: ./go-gost
+          name: node-binary-arm64
+          path: ./go-node
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -297,7 +297,7 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      - name: Build and push GOST Node Docker images
+      - name: Build and push Node Docker images
         run: |
           VERSION="${{ needs.check-version.outputs.version }}"
           docker buildx build \
@@ -305,30 +305,30 @@ jobs:
             --push \
             --cache-from type=gha \
             --cache-to type=gha,mode=max \
-            -t 0xnetuser/gost-node:latest \
-            -t 0xnetuser/gost-node:${VERSION} \
-            -f go-gost/Dockerfile \
-            ./go-gost
+            -t 0xnetuser/node:latest \
+            -t 0xnetuser/node:${VERSION} \
+            -f go-node/Dockerfile \
+            ./go-node
 
-  build-gost-binary:
-    name: Build & Push GOST Binary Image
-    needs: [check-version, build-gost]
-    if: needs.check-version.outputs.should_build_gost == 'true'
+  build-node-binary:
+    name: Build & Push Node Binary Image
+    needs: [check-version, build-node]
+    if: needs.check-version.outputs.should_build_node == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
-      - name: Download GOST AMD64 binary
+      - name: Download Node AMD64 binary
         uses: actions/download-artifact@v4
         with:
-          name: gost-binary-amd64
-          path: ./go-gost
+          name: node-binary-amd64
+          path: ./go-node
 
-      - name: Download GOST ARM64 binary
+      - name: Download Node ARM64 binary
         uses: actions/download-artifact@v4
         with:
-          name: gost-binary-arm64
-          path: ./go-gost
+          name: node-binary-arm64
+          path: ./go-node
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -339,7 +339,7 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      - name: Build and push GOST Binary Docker images
+      - name: Build and push Node Binary Docker images
         run: |
           VERSION="${{ needs.check-version.outputs.version }}"
           docker buildx build \
@@ -347,18 +347,18 @@ jobs:
             --push \
             --cache-from type=gha \
             --cache-to type=gha,mode=max \
-            -t 0xnetuser/gost-binary:latest \
-            -t 0xnetuser/gost-binary:${VERSION} \
-            -f go-gost/Dockerfile.binary \
-            ./go-gost
+            -t 0xnetuser/node-binary:latest \
+            -t 0xnetuser/node-binary:${VERSION} \
+            -f go-node/Dockerfile.binary \
+            ./go-node
 
   # ============================================================
-  # Release 阶段
+  # Release stage
   # ============================================================
 
   create-release:
     name: Create Release and Tag
-    needs: [check-version, build-gost, build-gost-node, build-gost-binary, build-nextjs-frontend, build-go-backend]
+    needs: [check-version, build-node, build-node-image, build-node-binary, build-nextjs-frontend, build-go-backend]
     if: needs.check-version.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -366,22 +366,22 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Download GOST AMD64 binary
+      - name: Download Node AMD64 binary
         uses: actions/download-artifact@v4
         with:
-          name: gost-binary-amd64
+          name: node-binary-amd64
           path: ./artifacts/amd64
 
-      - name: Download GOST ARM64 binary
+      - name: Download Node ARM64 binary
         uses: actions/download-artifact@v4
         with:
-          name: gost-binary-arm64
+          name: node-binary-arm64
           path: ./artifacts/arm64
 
       - name: Rename binaries
         run: |
-          mv ./artifacts/amd64/gost-amd64 ./artifacts/gost-amd64
-          mv ./artifacts/arm64/gost-arm64 ./artifacts/gost-arm64
+          mv ./artifacts/amd64/node-amd64 ./artifacts/node-amd64
+          mv ./artifacts/arm64/node-arm64 ./artifacts/node-arm64
 
       - name: Create Release
         env:
@@ -389,76 +389,71 @@ jobs:
         run: |
           VERSION="${{ needs.check-version.outputs.version }}"
 
-          # 创建并推送 tag
           git tag "${VERSION}" ${{ github.sha }}
           git push origin "${VERSION}"
 
-          # 获取 commit 信息
           COMMIT_MSG=$(git log -1 --pretty=format:"%s")
           COMMIT_AUTHOR=$(git log -1 --pretty=format:"%an")
           COMMIT_DATE=$(git log -1 --pretty=format:"%ai")
 
-          # 创建 release
           gh release create "${VERSION}" \
             --title "Release ${VERSION}" \
-            --notes "## 📝 Commit Information
+            --notes "## Commit Information
           - **Message**: ${COMMIT_MSG}
           - **Author**: ${COMMIT_AUTHOR}
           - **Date**: ${COMMIT_DATE}
           - **Commit**: [\`${GITHUB_SHA:0:7}\`](https://github.com/${{ github.repository }}/commit/${{ github.sha }})" \
             --repo ${{ github.repository }}
 
-          # 上传所有文件到 release
-          echo "📤 上传 GOST 二进制文件..."
-          gh release upload "${VERSION}" ./artifacts/gost-amd64 --clobber
-          gh release upload "${VERSION}" ./artifacts/gost-arm64 --clobber
+          echo "Uploading node binaries..."
+          gh release upload "${VERSION}" ./artifacts/node-amd64 --clobber
+          gh release upload "${VERSION}" ./artifacts/node-arm64 --clobber
 
-          echo "📤 上传安装脚本..."
+          echo "Uploading install scripts..."
           gh release upload "${VERSION}" ./install.sh --clobber
           gh release upload "${VERSION}" ./panel_install.sh --clobber
 
-          echo "📤 上传 Docker Compose 配置文件..."
+          echo "Uploading Docker Compose config..."
           gh release upload "${VERSION}" ./docker-compose.yml --clobber
 
-          echo "✅ 所有文件已上传到 Release ${VERSION}"
+          echo "All files uploaded to Release ${VERSION}"
 
-  update-release-gost:
-    name: Update GOST Binaries in Release
-    needs: [check-version, build-gost]
-    if: needs.check-version.outputs.should_build == 'false' && needs.check-version.outputs.should_build_gost == 'true'
+  update-release-node:
+    name: Update Node Binaries in Release
+    needs: [check-version, build-node]
+    if: needs.check-version.outputs.should_build == 'false' && needs.check-version.outputs.should_build_node == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v3
 
-      - name: Download GOST AMD64 binary
+      - name: Download Node AMD64 binary
         uses: actions/download-artifact@v4
         with:
-          name: gost-binary-amd64
+          name: node-binary-amd64
           path: ./artifacts/amd64
 
-      - name: Download GOST ARM64 binary
+      - name: Download Node ARM64 binary
         uses: actions/download-artifact@v4
         with:
-          name: gost-binary-arm64
+          name: node-binary-arm64
           path: ./artifacts/arm64
 
       - name: Rename binaries
         run: |
-          mv ./artifacts/amd64/gost-amd64 ./artifacts/gost-amd64
-          mv ./artifacts/arm64/gost-arm64 ./artifacts/gost-arm64
+          mv ./artifacts/amd64/node-amd64 ./artifacts/node-amd64
+          mv ./artifacts/arm64/node-arm64 ./artifacts/node-arm64
 
-      - name: Update GOST binaries in Release
+      - name: Update Node binaries in Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ needs.check-version.outputs.version }}"
 
-          echo "🔄 更新 Release ${VERSION} 中的 GOST 二进制文件..."
+          echo "Updating Release ${VERSION} node binaries..."
 
-          gh release upload "${VERSION}" ./artifacts/gost-amd64 --clobber
-          gh release upload "${VERSION}" ./artifacts/gost-arm64 --clobber
+          gh release upload "${VERSION}" ./artifacts/node-amd64 --clobber
+          gh release upload "${VERSION}" ./artifacts/node-arm64 --clobber
 
-          echo "✅ GOST 二进制文件更新完成！"
-          echo "ℹ️ Docker 镜像未重新构建"
+          echo "Node binaries updated!"

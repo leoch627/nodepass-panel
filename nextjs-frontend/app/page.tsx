@@ -83,7 +83,7 @@ export default function LoginPage() {
         localStorage.setItem('name', res.data.name);
         localStorage.setItem('admin', (res.data.role_id === 0).toString());
         localStorage.setItem('gost_enabled', (res.data.gost_enabled ?? 1).toString());
-        localStorage.setItem('xray_enabled', (res.data.xray_enabled ?? 1).toString());
+        localStorage.setItem('v_enabled', (res.data.v_enabled ?? 1).toString());
 
         toast.success(t('login.loginSuccess'));
 

@@ -316,7 +316,7 @@ function AdminDashboard({ stats, updateInfo }: { stats: any; updateInfo: UpdateI
                         <div className="text-sm">{formatBytes(user.flow || 0)}</div>
                         <div className="text-xs text-muted-foreground space-y-0.5">
                           <div>GOST: {formatBytes(user.gostFlow || 0)}</div>
-                          <div>Xray: {formatBytes(user.xrayFlow || 0)}</div>
+                          <div>Xray: {formatBytes(user.vFlow || 0)}</div>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -358,14 +358,14 @@ function UserDashboard({ stats }: { stats: any }) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatBytes((pkg.inFlow || 0) + (pkg.outFlow || 0) + (pkg.xrayInFlow || 0) + (pkg.xrayOutFlow || 0))}
+              {formatBytes((pkg.inFlow || 0) + (pkg.outFlow || 0) + (pkg.vInFlow || 0) + (pkg.vOutFlow || 0))}
             </div>
             <div className="text-xs text-muted-foreground space-y-0.5 mt-1">
               {(pkg.flow > 0 || (pkg.inFlow || 0) + (pkg.outFlow || 0) > 0) && (
                 <div>GOST: {formatBytes((pkg.inFlow || 0) + (pkg.outFlow || 0))} / {pkg.flow ? `${pkg.flow} GB` : '∞'}</div>
               )}
-              {(pkg.xrayFlow > 0 || (pkg.xrayInFlow || 0) + (pkg.xrayOutFlow || 0) > 0) && (
-                <div>Xray: {formatBytes((pkg.xrayInFlow || 0) + (pkg.xrayOutFlow || 0))} / {pkg.xrayFlow ? `${pkg.xrayFlow} GB` : '∞'}</div>
+              {(pkg.vFlow > 0 || (pkg.vInFlow || 0) + (pkg.vOutFlow || 0) > 0) && (
+                <div>Xray: {formatBytes((pkg.vInFlow || 0) + (pkg.vOutFlow || 0))} / {pkg.vFlow ? `${pkg.vFlow} GB` : '∞'}</div>
               )}
             </div>
           </CardContent>

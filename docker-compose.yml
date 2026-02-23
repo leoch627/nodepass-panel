@@ -1,7 +1,7 @@
 services:
   mysql:
     image: mysql:5.7
-    container_name: gost-mysql
+    container_name: flux-mysql
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
@@ -18,21 +18,21 @@ services:
       --max_connections=1000
       --innodb_buffer_pool_size=256M
     networks:
-      - gost-network
+      - flux-network
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       timeout: 10s
       retries: 10
 
-  gost-binary-init:
-    image: 0xnetuser/gost-binary:2.0.26
-    container_name: gost-binary-init
+  node-binary-init:
+    image: 0xnetuser/node-binary:2.1.0
+    container_name: node-binary-init
     volumes:
       - node_binary:/data/node
     restart: "no"
 
   backend:
-    image: 0xnetuser/go-backend:2.0.26
+    image: 0xnetuser/go-backend:2.1.0
     container_name: go-backend
     restart: unless-stopped
     environment:
@@ -53,10 +53,10 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-      gost-binary-init:
+      node-binary-init:
         condition: service_completed_successfully
     networks:
-      - gost-network
+      - flux-network
     healthcheck:
       test: ["CMD", "sh", "-c", "wget --no-verbose --tries=1 --spider http://localhost:6365/flow/test || exit 1"]
       interval: 10s
@@ -65,7 +65,7 @@ services:
       start_period: 10s
 
   frontend:
-    image: 0xnetuser/nextjs-frontend:2.0.26
+    image: 0xnetuser/nextjs-frontend:2.1.0
     container_name: nextjs-frontend
     restart: unless-stopped
     ports:
@@ -75,7 +75,7 @@ services:
       backend:
         condition: service_healthy
     networks:
-      - gost-network
+      - flux-network
 
 
 volumes:
@@ -91,7 +91,7 @@ volumes:
 
 
 networks:
-  gost-network:
-    name: gost-network
+  flux-network:
+    name: flux-network
     driver: bridge
     enable_ipv6: ${ENABLE_IPV6:-false}

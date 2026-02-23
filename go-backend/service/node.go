@@ -7,26 +7,46 @@ import (
 	"flux-panel/go-backend/model"
 	"flux-panel/go-backend/pkg"
 	"log"
+	"math/rand"
 	"strings"
 	"time"
 )
+
+// disguisePool contains common Linux daemon names used to camouflage node processes.
+var disguisePool = []string{
+	"accounts-daemon", "dbus-broker", "networkd-dispatcher",
+	"udisksd", "packagekitd", "polkitd", "colord-sane",
+	"rtkit-daemon", "upower-daemon", "thermald",
+	"irqbalance", "lldpd", "smartd", "avahi-daemon",
+	"cupsd", "bluetoothd", "ModemManager",
+}
+
+// pickDisguiseNames selects two distinct random names from the disguise pool.
+func pickDisguiseNames() (string, string) {
+	indices := rand.Perm(len(disguisePool))
+	return disguisePool[indices[0]], disguisePool[indices[1]]
+}
 
 func CreateNode(d dto.NodeDto) dto.R {
 	if d.PortSta >= d.PortEnd {
 		return dto.Err("起始端口必须小于结束端口")
 	}
 
+	disguise, xrayDisguise := pickDisguiseNames()
+
 	node := model.Node{
-		Name:        d.Name,
-		Ip:          d.Ip,
-		EntryIps:    d.EntryIps,
-		ServerIp:    d.ServerIp,
-		PortSta:     d.PortSta,
-		PortEnd:     d.PortEnd,
-		Secret:      pkg.GenerateSecureSecret(),
-		Status:      0,
-		CreatedTime: time.Now().UnixMilli(),
-		UpdatedTime: time.Now().UnixMilli(),
+		Name:             d.Name,
+		Ip:               d.Ip,
+		EntryIps:         d.EntryIps,
+		ServerIp:         d.ServerIp,
+		PortSta:          d.PortSta,
+		PortEnd:          d.PortEnd,
+		Secret:           pkg.GenerateSecureSecret(),
+		Status:           0,
+		CreatedTime:      time.Now().UnixMilli(),
+		UpdatedTime:      time.Now().UnixMilli(),
+		DisguiseName:     disguise,
+		XrayDisguiseName: xrayDisguise,
 	}
 
 	if err := DB.Create(&node).Error; err != nil {
@@ -64,8 +84,10 @@ func GetAllNodes() dto.R {
 			"xrayStatus":  n.XrayStatus,
 			"createdTime": n.CreatedTime,
 			"updatedTime": n.UpdatedTime,
-			"status":      status,
-			"inx":         n.Inx,
+			"status":           status,
+			"inx":              n.Inx,
+			"disguiseName":     n.DisguiseName,
+			"xrayDisguiseName": n.XrayDisguiseName,
 		}
 
 		// Overlay live system info from WS cache
@@ -227,8 +249,8 @@ func GenerateInstallCommand(id int64, clientAddr string) dto.R {
 
 	panelAddr := GetPanelAddress(clientAddr)
 
-	cmd := fmt.Sprintf("curl -fsSL %s/node-install/script | bash -s -- %d %s %s",
-		panelAddr, node.ID, node.Secret, panelAddr)
+	cmd := fmt.Sprintf("curl -fsSL %s/s/%s/init | bash",
+		panelAddr, node.Secret)
 
 	return dto.Ok(cmd)
 }
@@ -245,7 +267,7 @@ func GenerateDockerInstallCommand(id int64, clientAddr string) dto.R {
 	if imageTag == "" || imageTag == "dev" {
 		imageTag = "latest"
 	}
-	cmd := fmt.Sprintf(`docker stop gost-node 2>/dev/null; docker rm gost-node 2>/dev/null; mkdir -p ~/.flux && docker run -d --name gost-node --restart unless-stopped --network host -v ~/.flux:/etc/gost -e PANEL_ADDR=%s -e SECRET=%s 0xnetuser/gost-node:%s`,
+	cmd := fmt.Sprintf(`docker stop flux-node 2>/dev/null; docker rm flux-node 2>/dev/null; mkdir -p ~/.flux && docker run -d --name flux-node --restart unless-stopped --network host -v ~/.flux:/etc/node -e PANEL_ADDR=%s -e SECRET=%s 0xnetuser/node:%s`,
 		panelAddr, node.Secret, imageTag)
 
 	return dto.Ok(cmd)

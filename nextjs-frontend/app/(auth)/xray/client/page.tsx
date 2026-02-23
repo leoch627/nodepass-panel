@@ -22,7 +22,7 @@ import { useAuth } from '@/lib/hooks/use-auth';
 import { useTranslation } from '@/lib/i18n';
 
 export default function XrayClientPage() {
-  const { isAdmin, xrayEnabled } = useAuth();
+  const { isAdmin, vEnabled } = useAuth();
   const { t } = useTranslation();
   const [clients, setClients] = useState<any[]>([]);
   const [inbounds, setInbounds] = useState<any[]>([]);
@@ -191,7 +191,7 @@ export default function XrayClientPage() {
     }
   };
 
-  if (!isAdmin && !xrayEnabled) {
+  if (!isAdmin && !vEnabled) {
     return (
       <div className="flex items-center justify-center h-64">
         <p className="text-muted-foreground">{t('xrayClient.noPermission')}</p>

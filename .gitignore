@@ -51,7 +51,7 @@ $RECYCLE.BIN/
 *.iml
 *.ipr
 out/
-go-gost/ss/
+go-node/ss/
 # VS Code
 .vscode/
 *.code-workspace
@@ -213,13 +213,15 @@ secrets.json
 *.p12
 *.pfx
 
-# Go-gost 特定配置文件
-go-gost/config.json
-go-gost/gost.json
+# Node agent config files
+go-node/config.json
+go-node/runtime.json
 
 # Build artifacts
-go-gost/gost
-go-gost/gost-*
+go-node/node
+go-node/node-*
+go-node/gost
+go-node/.next/
 go-backend/go-backend
 
 # ==========================================

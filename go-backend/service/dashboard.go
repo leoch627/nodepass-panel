@@ -49,7 +49,7 @@ func GetAdminDashboardStats() dto.R {
 		Name     string `json:"name" gorm:"column:user"`
 		Flow     int64  `json:"flow"`
 		GostFlow int64  `json:"gostFlow"`
-		XrayFlow int64  `json:"xrayFlow"`
+		XrayFlow int64  `json:"vFlow"`
 	}
 	var topUsers []TopUser
 	DB.Model(&model.User{}).

@@ -47,8 +47,8 @@ interface NodeHealth {
   cpuUsage?: number;
   memUsage?: number;
   uptime?: number;
-  xrayRunning?: boolean;
-  xrayVersion?: string;
+  vRunning?: boolean;
+  vVersion?: string;
   interfaces?: { name: string; ips: string[] }[];
   bytesReceived?: number;
   bytesTransmitted?: number;
@@ -218,7 +218,7 @@ export default function MonitorPage() {
       getTrafficOverview(gostGranularity, gostGranularity === 'day' ? 168 : 24),
       getXrayTrafficOverview(xrayGranularity, xrayGranularity === 'day' ? 168 : 24),
       post('/forward/list', {}),
-      post('/xray/inbound/list', {}),
+      post('/v/inbound/list', {}),
     ]);
 
     if (healthRes.code === 0) setNodes(healthRes.data || []);
@@ -485,9 +485,9 @@ export default function MonitorPage() {
                     </div>
                     <div className="flex items-center justify-between">
                       <span>Xray</span>
-                      {node.xrayRunning ? (
+                      {node.vRunning ? (
                         <Badge variant="default" className="text-xs">
-                          {node.xrayVersion?.match(/Xray\s+([\d.]+)/)?.[1] ? `Xray ${node.xrayVersion.match(/Xray\s+([\d.]+)/)![1]}` : (node.xrayVersion || t('monitor.running'))}
+                          {node.vVersion?.match(/Xray\s+([\d.]+)/)?.[1] ? `Xray ${node.vVersion.match(/Xray\s+([\d.]+)/)![1]}` : (node.vVersion || t('monitor.running'))}
                         </Badge>
                       ) : (
                         <Badge variant="secondary" className="text-xs">{t('monitor.notRunning')}</Badge>

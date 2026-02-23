@@ -9,7 +9,7 @@ type LoginDto struct {
 
 type NodePermission struct {
 	NodeId      int64 `json:"nodeId"`
-	XrayEnabled *int  `json:"xrayEnabled"`
+	XrayEnabled *int  `json:"vEnabled"`
 	GostEnabled *int  `json:"gostEnabled"`
 }
 
@@ -17,14 +17,14 @@ type UserDto struct {
 	User            string           `json:"user" binding:"required"`
 	Pwd             string           `json:"pwd" binding:"required"`
 	Flow            int64            `json:"flow"`
-	XrayFlow        int64            `json:"xrayFlow"`
+	XrayFlow        int64            `json:"vFlow"`
 	Num             int              `json:"num"`
 	ExpTime         int64            `json:"expTime"`
 	FlowResetType   int              `json:"flowResetType"`
 	FlowResetDay    int              `json:"flowResetDay"`
 	Status          *int             `json:"status"`
 	GostEnabled     *int             `json:"gostEnabled"`
-	XrayEnabled     *int             `json:"xrayEnabled"`
+	XrayEnabled     *int             `json:"vEnabled"`
 	NodeIds         []int64          `json:"nodeIds"`
 	NodePermissions []NodePermission `json:"nodePermissions"`
 }
@@ -34,14 +34,14 @@ type UserUpdateDto struct {
 	User            string           `json:"user" binding:"required"`
 	Pwd             string           `json:"pwd"`
 	Flow            int64            `json:"flow"`
-	XrayFlow        int64            `json:"xrayFlow"`
+	XrayFlow        int64            `json:"vFlow"`
 	Num             int              `json:"num"`
 	ExpTime         int64            `json:"expTime"`
 	FlowResetType   int              `json:"flowResetType"`
 	FlowResetDay    int              `json:"flowResetDay"`
 	Status          *int             `json:"status"`
 	GostEnabled     *int             `json:"gostEnabled"`
-	XrayEnabled     *int             `json:"xrayEnabled"`
+	XrayEnabled     *int             `json:"vEnabled"`
 	NodeIds         []int64          `json:"nodeIds"`
 	NodePermissions []NodePermission `json:"nodePermissions"`
 }

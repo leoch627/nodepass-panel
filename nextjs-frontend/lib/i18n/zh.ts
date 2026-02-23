@@ -312,6 +312,8 @@ const zh = {
     ipv6DockerDaemonDesc: '需要先配置 Docker 开启 IPv6 支持，编辑或创建 /etc/docker/daemon.json：',
     ipv6DockerRestart: '保存后重启 Docker 使配置生效：',
     uninstallCommand: '卸载命令',
+    disguiseName: '进程伪装名',
+    xrayDisguiseName: 'Xray 伪装名',
   },
   user: {
     title: '用户管理',
