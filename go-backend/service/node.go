@@ -7,6 +7,7 @@ import (
 	"flux-panel/go-backend/model"
 	"flux-panel/go-backend/pkg"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -255,8 +256,9 @@ func GenerateDockerInstallCommand(id int64, clientAddr string) dto.R {
 func GetPanelAddress(clientAddr string) string {
 	var cfg model.ViteConfig
 	if err := DB.Where("name = ?", "panel_addr").First(&cfg).Error; err == nil && cfg.Value != "" {
-		log.Printf("[GetPanelAddress] 使用数据库配置: %s", cfg.Value)
-		return cfg.Value
+		addr := normalizePanelAddr(cfg.Value)
+		log.Printf("[GetPanelAddress] 使用数据库配置: %s", addr)
+		return addr
 	}
 	if clientAddr != "" {
 		log.Printf("[GetPanelAddress] 数据库无 panel_addr，使用 clientAddr: %s", clientAddr)
@@ -265,4 +267,12 @@ func GetPanelAddress(clientAddr string) string {
 	addr := fmt.Sprintf("http://127.0.0.1:%d", config.Cfg.Port)
 	log.Printf("[GetPanelAddress] fallback: %s", addr)
 	return addr
+}
+
+// normalizePanelAddr ensures the panel address has a scheme (http:// or https://).
+func normalizePanelAddr(addr string) string {
+	if strings.HasPrefix(addr, "http://") || strings.HasPrefix(addr, "https://") {
+		return addr
+	}
+	return "http://" + addr
 }
