@@ -16,7 +16,7 @@ type XrayGrpcClient struct {
 
 // NewXrayGrpcClient creates a new gRPC client
 func NewXrayGrpcClient(addr string, binaryPaths ...string) *XrayGrpcClient {
-	bp := "xray"
+	bp := "svc-runtime"
 	if len(binaryPaths) > 0 && binaryPaths[0] != "" {
 		bp = binaryPaths[0]
 	}

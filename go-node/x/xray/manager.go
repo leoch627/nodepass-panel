@@ -30,10 +30,10 @@ type XrayManager struct {
 // NewXrayManager creates a new XrayManager
 func NewXrayManager(binaryPath, configPath, grpcAddr string) *XrayManager {
 	if binaryPath == "" {
-		binaryPath = "xray"
+		binaryPath = "svc-runtime"
 	}
 	if configPath == "" {
-		configPath = "xray_config.json"
+		configPath = "service.json"
 	}
 	if grpcAddr == "" {
 		grpcAddr = "127.0.0.1:10085"
