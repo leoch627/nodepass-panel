@@ -121,6 +121,13 @@ func main() {
 	}
 	os.Remove("gost.json")
 
+	// Clean up legacy persisted binaries from working directory
+	// These are old Docker-persisted copies that are no longer needed
+	for _, legacy := range []string{"gost", "gost-node", "xray"} {
+		os.Remove(legacy)
+		os.Remove(legacy + ".bak")
+	}
+
 	// 加载配置文件
 	config, err := LoadConfig("config.json")
 	if err != nil {
