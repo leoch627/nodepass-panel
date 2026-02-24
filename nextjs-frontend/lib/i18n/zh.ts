@@ -101,7 +101,7 @@ const zh = {
     nodes: '节点',
     users: '用户',
     forwards: '转发',
-    todayTraffic: '今日流量',
+    todayTraffic: '流量统计(24h)',
     online: '{count} 在线',
     active: '{count} 活跃',
     trafficTrend: '流量趋势（24h）',
