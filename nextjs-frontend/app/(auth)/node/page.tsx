@@ -469,10 +469,10 @@ export default function NodePage() {
           <TableCell className="text-sm">
             {isOnline && n.cpuUsage != null ? `${n.cpuUsage.toFixed(1)}%` : '-'} / {isOnline && n.memUsage != null ? `${n.memUsage.toFixed(1)}%` : '-'}
           </TableCell>
-          <TableCell className="text-sm text-green-600">
+          <TableCell className="text-sm">
             {isOnline && nodeSpeeds[n.id] ? formatSpeed(nodeSpeeds[n.id].uploadSpeed) : '-'}
           </TableCell>
-          <TableCell className="text-sm text-blue-600">
+          <TableCell className="text-sm">
             {isOnline && nodeSpeeds[n.id] ? formatSpeed(nodeSpeeds[n.id].downloadSpeed) : '-'}
           </TableCell>
           <TableCell className="text-sm">

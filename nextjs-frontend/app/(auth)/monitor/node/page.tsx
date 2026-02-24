@@ -277,11 +277,11 @@ export default function NodeMonitorPage() {
                 {nodeSpeeds[node.id] && (
                   <div className="grid grid-cols-2 gap-1 text-xs">
                     <div className="flex items-center gap-1">
-                      <span className="text-green-500">{t('monitor.upload')}</span>
+                      <span>{t('monitor.upload')}</span>
                       <span>{formatSpeed(nodeSpeeds[node.id].uploadSpeed)}</span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <span className="text-blue-500">{t('monitor.download')}</span>
+                      <span>{t('monitor.download')}</span>
                       <span>{formatSpeed(nodeSpeeds[node.id].downloadSpeed)}</span>
                     </div>
                   </div>
@@ -371,10 +371,10 @@ export default function NodeMonitorPage() {
               )
             ) : '-'}
           </TableCell>
-          <TableCell className="text-sm text-green-600">
+          <TableCell className="text-sm">
             {node.online && nodeSpeeds[node.id] ? formatSpeed(nodeSpeeds[node.id].uploadSpeed) : '-'}
           </TableCell>
-          <TableCell className="text-sm text-blue-600">
+          <TableCell className="text-sm">
             {node.online && nodeSpeeds[node.id] ? formatSpeed(nodeSpeeds[node.id].downloadSpeed) : '-'}
           </TableCell>
           <TableCell className="text-sm">
