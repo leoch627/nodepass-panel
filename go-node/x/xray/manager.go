@@ -933,6 +933,28 @@ func (m *XrayManager) updateConfigFile(mutate func(config map[string]interface{}
 	}
 }
 
+// GetInboundTags reads the Xray config file and returns all inbound tags.
+func (m *XrayManager) GetInboundTags() ([]string, error) {
+	data, err := os.ReadFile(m.configPath)
+	if err != nil {
+		return nil, err
+	}
+	var cfg map[string]interface{}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+	inbounds, _ := cfg["inbounds"].([]interface{})
+	var tags []string
+	for _, ib := range inbounds {
+		if ibMap, ok := ib.(map[string]interface{}); ok {
+			if tag, ok := ibMap["tag"].(string); ok {
+				tags = append(tags, tag)
+			}
+		}
+	}
+	return tags, nil
+}
+
 // InboundConfig represents an inbound configuration from the panel
 type InboundConfig struct {
 	Tag                string `json:"tag"`

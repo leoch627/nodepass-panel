@@ -183,7 +183,7 @@ func CreateXrayInbound(d dto.XrayInboundDto, userId int64, roleId int) dto.R {
 			log.Printf("[XrayInbound] Xray not installed on node %d, inbound saved but not deployed", node.ID)
 			return dto.Warn("入站已保存，但 "+result.Msg+"。安装后请同步配置以部署。", inbound)
 		}
-		DB.Delete(&inbound)
+		DB.Model(&inbound).Update("enable", -1)
 		return dto.Err("Xray 热加载入站失败: " + result.Msg)
 	}
 

@@ -21,6 +21,7 @@ import (
 
 	"github.com/go-gost/x/config"
 	"github.com/go-gost/x/internal/util/crypto"
+	"github.com/go-gost/x/registry"
 	"github.com/go-gost/x/service"
 	"github.com/go-gost/x/xray"
 	"github.com/gorilla/websocket"
@@ -647,6 +648,24 @@ func (w *WebSocketReporter) routeCommand(cmd CommandMessage) {
 	case "VSwitchVersion":
 		err = w.handleXraySwitchVersion(cmd.Data)
 		response.Type = "VSwitchVersionResponse"
+
+	case "GetServiceNames":
+		names := make([]string, 0)
+		for name := range registry.ServiceRegistry().GetAll() {
+			names = append(names, name)
+		}
+		response.Type = "GetServiceNamesResponse"
+		response.Data = map[string]interface{}{"services": names}
+
+	case "VGetInboundTags":
+		mgr := w.getOrInitXrayManager()
+		tags, e := mgr.GetInboundTags()
+		if e != nil {
+			err = e
+		} else {
+			response.Data = map[string]interface{}{"tags": tags}
+		}
+		response.Type = "VGetInboundTagsResponse"
 
 	case "NodeUpdateBinary":
 		err = w.handleNodeUpdateBinary(cmd.Data)

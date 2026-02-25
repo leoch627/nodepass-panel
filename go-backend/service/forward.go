@@ -140,7 +140,7 @@ func CreateForward(d dto.ForwardDto, userId int64, roleId int, userName string) 
 	serviceName := buildServiceName(forward.ID, forward.UserId, userTunnel)
 	gostErr := createGostServices(&forward, &tunnel, limiter, inNode, outNode, serviceName)
 	if gostErr != "" {
-		DB.Delete(&forward)
+		DB.Model(&forward).Update("status", forwardStatusError)
 		return dto.Err(gostErr)
 	}
 

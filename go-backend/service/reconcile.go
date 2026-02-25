@@ -1,11 +1,13 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"flux-panel/go-backend/dto"
 	"flux-panel/go-backend/model"
 	"flux-panel/go-backend/pkg"
 	"log"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -16,13 +18,14 @@ var reconcileLocks sync.Map
 
 // ReconcileResult holds the summary of a reconciliation run.
 type ReconcileResult struct {
-	NodeId   int64    `json:"nodeId"`
-	Limiters int      `json:"limiters"`
-	Forwards int      `json:"forwards"`
-	Inbounds int      `json:"inbounds"`
-	Certs    int      `json:"certs"`
-	Errors   []string `json:"errors,omitempty"`
-	Duration int64    `json:"duration"`
+	NodeId         int64    `json:"nodeId"`
+	Limiters       int      `json:"limiters"`
+	Forwards       int      `json:"forwards"`
+	Inbounds       int      `json:"inbounds"`
+	Certs          int      `json:"certs"`
+	OrphansCleaned int      `json:"orphansCleaned,omitempty"`
+	Errors         []string `json:"errors,omitempty"`
+	Duration       int64    `json:"duration"`
 }
 
 func getNodeLock(nodeId int64) *sync.Mutex {
@@ -71,9 +74,13 @@ func ReconcileNode(nodeId int64) ReconcileResult {
 		reconcileXrayCerts(nodeId, &result)
 	}
 
+	// Phase 5: Cleanup orphan services (reverse reconcile)
+	cleanupOrphanServices(nodeId, &result)
+	cleanupOrphanXrayInbounds(nodeId, &result)
+
 	result.Duration = time.Since(start).Milliseconds()
-	log.Printf("[Reconcile] 节点 %d 同步完成: 限速器=%d 转发=%d 入站=%d 证书=%d 耗时=%dms 错误=%d",
-		nodeId, result.Limiters, result.Forwards, result.Inbounds, result.Certs, result.Duration, len(result.Errors))
+	log.Printf("[Reconcile] 节点 %d 同步完成: 限速器=%d 转发=%d 入站=%d 证书=%d 孤儿清理=%d 耗时=%dms 错误=%d",
+		nodeId, result.Limiters, result.Forwards, result.Inbounds, result.Certs, result.OrphansCleaned, result.Duration, len(result.Errors))
 
 	return result
 }
@@ -156,6 +163,8 @@ func reconcileForwards(nodeId int64, result *ReconcileResult) {
 			errStr := gentleSyncGostServices(&fwd, &fwdTunnel, limiter, inNode, outNode, serviceName)
 			if errStr != "" {
 				result.Errors = append(result.Errors, fmt.Sprintf("转发 %d: %s", fwd.ID, errStr))
+			} else if fwd.Status == forwardStatusError {
+				DB.Model(&model.Forward{}).Where("id = ?", fwd.ID).Update("status", forwardStatusActive)
 			}
 			result.Forwards++
 
@@ -238,7 +247,7 @@ func gentleSyncGostServices(forward *model.Forward, tunnel *model.Tunnel, limite
 
 func reconcileXrayInbounds(nodeId int64, result *ReconcileResult) {
 	var inbounds []model.XrayInbound
-	DB.Where("node_id = ? AND enable = 1", nodeId).Find(&inbounds)
+	DB.Where("node_id = ? AND enable IN (1, -1)", nodeId).Find(&inbounds)
 
 	if len(inbounds) == 0 {
 		// No inbounds — stop Xray if it's running (e.g. stale from before inbounds were deleted)
@@ -275,6 +284,8 @@ func reconcileXrayInbounds(nodeId int64, result *ReconcileResult) {
 		r := pkg.XrayApplyConfig(nodeId, inbounds)
 		if r != nil && r.Msg != gostSuccessMsg {
 			result.Errors = append(result.Errors, fmt.Sprintf("Xray ApplyConfig: %s", r.Msg))
+		} else {
+			DB.Model(&model.XrayInbound{}).Where("node_id = ? AND enable = -1", nodeId).Update("enable", 1)
 		}
 		result.Inbounds = len(inbounds)
 		return
@@ -294,6 +305,9 @@ func reconcileXrayInbounds(nodeId int64, result *ReconcileResult) {
 		}
 		result.Inbounds++
 	}
+
+	// Recover error-state inbounds after successful hot-add sync
+	DB.Model(&model.XrayInbound{}).Where("node_id = ? AND enable = -1", nodeId).Update("enable", 1)
 }
 
 // ---------------------------------------------------------------------------
@@ -313,6 +327,159 @@ func reconcileXrayCerts(nodeId int64, result *ReconcileResult) {
 			result.Errors = append(result.Errors, fmt.Sprintf("证书 %s: %s", cert.Domain, r.Msg))
 		}
 		result.Certs++
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 — Reverse reconcile: cleanup orphan services
+// ---------------------------------------------------------------------------
+
+func cleanupOrphanServices(nodeId int64, result *ReconcileResult) {
+	// 1. Get all GOST service names from the node
+	resp := pkg.GetServiceNames(nodeId)
+	if resp == nil || resp.Msg != gostSuccessMsg || resp.Data == nil {
+		return // skip on failure (don't block normal reconcile)
+	}
+
+	// 2. Parse service name list
+	dataBytes, _ := json.Marshal(resp.Data)
+	var data struct {
+		Services []string `json:"services"`
+	}
+	if json.Unmarshal(dataBytes, &data) != nil || len(data.Services) == 0 {
+		return
+	}
+
+	// 3. Extract forwardId (first segment of service name), deduplicate
+	orphanForwardIds := make(map[int64]bool)
+	servicesByForward := make(map[int64][]string)
+	for _, name := range data.Services {
+		parts := strings.Split(name, "_")
+		if len(parts) < 3 {
+			continue // not created by panel
+		}
+		fid, err := strconv.ParseInt(parts[0], 10, 64)
+		if err != nil {
+			continue
+		}
+		orphanForwardIds[fid] = true
+		servicesByForward[fid] = append(servicesByForward[fid], name)
+	}
+
+	if len(orphanForwardIds) == 0 {
+		return
+	}
+
+	// 4. Query DB for forwardIds that belong to this node (via tunnel)
+	ids := make([]int64, 0, len(orphanForwardIds))
+	for id := range orphanForwardIds {
+		ids = append(ids, id)
+	}
+	var existingIds []int64
+	DB.Model(&model.Forward{}).
+		Joins("JOIN tunnel ON tunnel.id = forward.tunnel_id").
+		Where("forward.id IN ? AND (tunnel.in_node_id = ? OR tunnel.out_node_id = ?)", ids, nodeId, nodeId).
+		Pluck("forward.id", &existingIds)
+
+	// 5. Remove non-orphans (exist in DB)
+	for _, id := range existingIds {
+		delete(orphanForwardIds, id)
+	}
+
+	if len(orphanForwardIds) == 0 {
+		return
+	}
+
+	// 6. Delete orphan services
+	var orphanNames []string
+	for fid := range orphanForwardIds {
+		orphanNames = append(orphanNames, servicesByForward[fid]...)
+	}
+
+	delResp := pkg.WS.SendMsg(nodeId, map[string]interface{}{
+		"services": orphanNames,
+	}, "DeleteService")
+
+	if delResp != nil && delResp.Msg == gostSuccessMsg {
+		result.OrphansCleaned += len(orphanForwardIds)
+		log.Printf("[Reconcile] 节点 %d 清理了 %d 个孤儿转发 (%d 个服务)",
+			nodeId, len(orphanForwardIds), len(orphanNames))
+	} else {
+		msg := "unknown"
+		if delResp != nil {
+			msg = delResp.Msg
+		}
+		log.Printf("[Reconcile] 节点 %d 清理孤儿服务失败: %s", nodeId, msg)
+	}
+}
+
+func cleanupOrphanXrayInbounds(nodeId int64, result *ReconcileResult) {
+	// 1. Get all Xray inbound tags from the node
+	resp := pkg.XrayGetInboundTags(nodeId)
+	if resp == nil || resp.Msg != gostSuccessMsg || resp.Data == nil {
+		return
+	}
+
+	// 2. Parse tags list
+	dataBytes, _ := json.Marshal(resp.Data)
+	var data struct {
+		Tags []string `json:"tags"`
+	}
+	if json.Unmarshal(dataBytes, &data) != nil || len(data.Tags) == 0 {
+		return
+	}
+
+	// 3. Filter panel-created inbounds (format: inbound-{id}), extract IDs
+	type tagInfo struct {
+		tag string
+		id  int64
+	}
+	var panelTags []tagInfo
+	for _, tag := range data.Tags {
+		if !strings.HasPrefix(tag, "inbound-") {
+			continue // skip system tags like "api"
+		}
+		idStr := strings.TrimPrefix(tag, "inbound-")
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			continue
+		}
+		panelTags = append(panelTags, tagInfo{tag: tag, id: id})
+	}
+	if len(panelTags) == 0 {
+		return
+	}
+
+	// 4. Query DB for existing inbound IDs on this node
+	ids := make([]int64, 0, len(panelTags))
+	for _, t := range panelTags {
+		ids = append(ids, t.id)
+	}
+	var existingIds []int64
+	DB.Model(&model.XrayInbound{}).
+		Where("id IN ? AND node_id = ?", ids, nodeId).
+		Pluck("id", &existingIds)
+	existingSet := make(map[int64]bool, len(existingIds))
+	for _, id := range existingIds {
+		existingSet[id] = true
+	}
+
+	// 5. Hot-remove orphan inbounds
+	for _, t := range panelTags {
+		if existingSet[t.id] {
+			continue
+		}
+		r := pkg.XrayRemoveInbound(nodeId, t.tag)
+		if r != nil && r.Msg == gostSuccessMsg {
+			result.OrphansCleaned++
+			log.Printf("[Reconcile] 节点 %d 清理孤儿 Xray 入站: %s", nodeId, t.tag)
+		} else {
+			msg := "unknown"
+			if r != nil {
+				msg = r.Msg
+			}
+			log.Printf("[Reconcile] 节点 %d 清理孤儿入站 %s 失败: %s", nodeId, t.tag, msg)
+		}
 	}
 }
 

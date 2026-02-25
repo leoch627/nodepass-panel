@@ -92,6 +92,10 @@ func XraySwitchVersion(nodeId int64, version string) *dto.GostResponse {
 	return WS.SendMsg(nodeId, data, "VSwitchVersion")
 }
 
+func XrayGetInboundTags(nodeId int64) *dto.GostResponse {
+	return WS.SendMsg(nodeId, nil, "VGetInboundTags")
+}
+
 func XrayDeployCert(nodeId int64, domain, publicKey, privateKey string) *dto.GostResponse {
 	data := map[string]interface{}{
 		"domain":     domain,

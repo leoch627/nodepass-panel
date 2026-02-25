@@ -178,6 +178,10 @@ func DeleteChains(nodeId int64, name string) *dto.GostResponse {
 	return WS.SendMsg(nodeId, data, "DeleteChains")
 }
 
+func GetServiceNames(nodeId int64) *dto.GostResponse {
+	return WS.SendMsg(nodeId, nil, "GetServiceNames")
+}
+
 // --- internal builders ---
 
 func createLimiterData(name int64, speed string) map[string]interface{} {
