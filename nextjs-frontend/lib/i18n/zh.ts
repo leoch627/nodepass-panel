@@ -137,6 +137,9 @@ const zh = {
     totalFlow: '总额 {flow} GB',
     totalAccumulated: '累计总流量',
     expireTime: '到期时间',
+    monthlyTraffic: '本月流量统计',
+    nodeTrafficRank: '节点流量排行',
+    monthlyFlow: '本月流量',
   },
   forward: {
     title: '转发管理',
@@ -186,6 +189,8 @@ const zh = {
     failed: '失败',
     selectEntry: '选择入口',
     user: '创建用户',
+    adminForwards: '管理员转发',
+    userForwards: '用户转发',
   },
   tunnel: {
     title: '隧道管理',
@@ -427,6 +432,9 @@ const zh = {
     cardView: '卡片',
     tableView: '表格',
     ungrouped: '未分组',
+    searchForward: '搜索转发...',
+    mergedView: '合并显示',
+    byTunnelView: '按隧道分图',
   },
   config: {
     title: '系统配置',

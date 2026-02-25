@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RefreshCw, Filter } from 'lucide-react';
@@ -15,7 +16,11 @@ import {
   AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 
-const CHART_COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c43', '#a4de6c', '#d0ed57', '#8dd1e1', '#83a6ed'];
+const CHART_COLORS = [
+  '#8884d8', '#82ca9d', '#ffc658', '#ff7c43', '#a4de6c', '#d0ed57', '#8dd1e1', '#83a6ed',
+  '#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#42d4f4', '#f032e6', '#bfef45',
+  '#fabed4', '#469990', '#dcbeff', '#9a6324', '#800000', '#aaffc3', '#808000', '#000075',
+];
 
 function formatBytes(bytes: number) {
   if (bytes === 0) return '0 B';
@@ -36,6 +41,7 @@ interface ForwardItem {
   remoteAddr: string;
   status: number;
   tunnelName?: string;
+  tunnelId?: number;
 }
 
 interface InboundItem {
@@ -70,6 +76,7 @@ export default function NetworkMonitorPage() {
   const [gostFilterOpen, setGostFilterOpen] = useState(false);
   const gostFilterRef = useRef<HTMLDivElement>(null);
   const [gostHidden, setGostHidden] = useState<Set<string>>(new Set());
+  const [gostFilterSearch, setGostFilterSearch] = useState('');
 
   // Xray traffic state
   const [xrayTrafficData, setXrayTrafficData] = useState<any[]>([]);
@@ -80,6 +87,7 @@ export default function NetworkMonitorPage() {
   const [xrayFilterOpen, setXrayFilterOpen] = useState(false);
   const xrayFilterRef = useRef<HTMLDivElement>(null);
   const [xrayHidden, setXrayHidden] = useState<Set<string>>(new Set());
+  const [xrayFilterSearch, setXrayFilterSearch] = useState('');
 
   // Latency state
   const [latencyRange, setLatencyRange] = useState('6');
@@ -89,6 +97,8 @@ export default function NetworkMonitorPage() {
   const [latencyFilterOpen, setLatencyFilterOpen] = useState(false);
   const latencyFilterRef = useRef<HTMLDivElement>(null);
   const [latencyHidden, setLatencyHidden] = useState<Set<string>>(new Set());
+  const [latencyFilterSearch, setLatencyFilterSearch] = useState('');
+  const [latencyGroupMode, setLatencyGroupMode] = useState<'merged' | 'byTunnel'>('merged');
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -123,7 +133,8 @@ export default function NetworkMonitorPage() {
       const fwds = forwardRes.data || [];
       setForwards(fwds);
       if (!forwardsInitialized.current) {
-        const activeIds = new Set<number>(fwds.filter((f: ForwardItem) => f.status === 1).map((f: ForwardItem) => f.id));
+        const activeFwds = fwds.filter((f: ForwardItem) => f.status === 1);
+        const activeIds = new Set<number>(activeFwds.slice(0, 10).map((f: ForwardItem) => f.id));
         setSelectedForwards(activeIds);
         setGostSelectedForwards(activeIds);
         forwardsInitialized.current = true;
@@ -234,8 +245,8 @@ export default function NetworkMonitorPage() {
         : -1;
       const last = records[records.length - 1];
       stats[f.id] = {
-        avg: Math.round(avg * 100) / 100,
-        last: last.success ? Math.round(last.latency * 100) / 100 : -1,
+        avg: Math.round(avg * 10) / 10,
+        last: last.success ? Math.round(last.latency * 10) / 10 : -1,
         successRate: records.length > 0 ? Math.round((successes.length / records.length) * 100) : 0,
       };
     }
@@ -249,7 +260,7 @@ export default function NetworkMonitorPage() {
           timeMap.set(r.recordTime, { time: formatTime(r.recordTime), _ts: r.recordTime });
         }
         const row = timeMap.get(r.recordTime)!;
-        row[f.name] = r.success ? r.latency : null;
+        row[f.name] = r.success ? Math.round(r.latency * 10) / 10 : null;
       }
     }
 
@@ -316,6 +327,24 @@ export default function NetworkMonitorPage() {
     );
   }
 
+  const activeForwards = forwards.filter(f => f.status === 1);
+  const selectedActiveForwards = forwards.filter((f) => f.status === 1 && selectedForwards.has(f.id));
+
+  // Group forwards by tunnel for by-tunnel view
+  const tunnelGroups = (() => {
+    const groups: Record<string, ForwardItem[]> = {};
+    const order: string[] = [];
+    for (const f of selectedActiveForwards) {
+      const tname = f.tunnelName || 'Unknown';
+      if (!groups[tname]) {
+        groups[tname] = [];
+        order.push(tname);
+      }
+      groups[tname].push(f);
+    }
+    return { groups, order };
+  })();
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -359,13 +388,29 @@ export default function NetworkMonitorPage() {
                 <div className="relative" ref={gostFilterRef}>
                   <Button variant="outline" size="sm" onClick={() => setGostFilterOpen(!gostFilterOpen)}>
                     <Filter className="h-4 w-4 mr-1" />
-                    {gostSelectedForwards.size === forwards.filter(f => f.status === 1).length
+                    {gostSelectedForwards.size === activeForwards.length
                       ? t('monitor.allForwards')
                       : t('monitor.selected', { count: gostSelectedForwards.size })}
                   </Button>
                   {gostFilterOpen && (
                     <div className="absolute right-0 top-full mt-1 z-50 bg-popover border rounded-md shadow-md p-3 min-w-[200px] max-h-[300px] overflow-y-auto">
-                      {forwards.filter(f => f.status === 1).map((f) => (
+                      <Input
+                        placeholder={t('monitor.searchForward')}
+                        value={gostFilterSearch}
+                        onChange={e => setGostFilterSearch(e.target.value)}
+                        className="mb-2 h-8 text-sm"
+                      />
+                      <div className="flex gap-1 mb-2">
+                        <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => {
+                          setGostSelectedForwards(new Set(activeForwards.map(f => f.id)));
+                        }}>{t('user.selectAll')}</Button>
+                        <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => {
+                          setGostSelectedForwards(new Set());
+                        }}>{t('user.deselectAll')}</Button>
+                      </div>
+                      {activeForwards
+                        .filter(f => !gostFilterSearch || f.name.toLowerCase().includes(gostFilterSearch.toLowerCase()))
+                        .map((f) => (
                         <label key={f.id} className="flex items-center gap-2 py-1 cursor-pointer">
                           <Checkbox
                             checked={gostSelectedForwards.has(f.id)}
@@ -381,7 +426,7 @@ export default function NetworkMonitorPage() {
                           <span className="text-sm">{f.name}</span>
                         </label>
                       ))}
-                      {forwards.filter(f => f.status === 1).length === 0 && (
+                      {activeForwards.length === 0 && (
                         <p className="text-sm text-muted-foreground">{t('monitor.noRunningForwards')}</p>
                       )}
                     </div>
@@ -417,7 +462,7 @@ export default function NetworkMonitorPage() {
                   <Tooltip formatter={(v) => formatBytes(Number(v))} />
                   <Legend
                     onClick={handleLegendClick(setGostHidden)}
-                    wrapperStyle={{ fontSize: 12, maxHeight: 60, overflowY: 'auto', cursor: 'pointer' }}
+                    wrapperStyle={{ fontSize: 12, maxHeight: 120, overflowY: 'auto', cursor: 'pointer' }}
                     formatter={(value) => (
                       <span style={{ color: gostHidden.has(value as string) ? '#ccc' : undefined }}>{value}</span>
                     )}
@@ -475,7 +520,23 @@ export default function NetworkMonitorPage() {
                   </Button>
                   {xrayFilterOpen && (
                     <div className="absolute right-0 top-full mt-1 z-50 bg-popover border rounded-md shadow-md p-3 min-w-[200px] max-h-[300px] overflow-y-auto">
-                      {inbounds.map((ib) => (
+                      <Input
+                        placeholder={t('monitor.searchForward')}
+                        value={xrayFilterSearch}
+                        onChange={e => setXrayFilterSearch(e.target.value)}
+                        className="mb-2 h-8 text-sm"
+                      />
+                      <div className="flex gap-1 mb-2">
+                        <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => {
+                          setXraySelectedInbounds(new Set(inbounds.map(ib => ib.id)));
+                        }}>{t('user.selectAll')}</Button>
+                        <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => {
+                          setXraySelectedInbounds(new Set());
+                        }}>{t('user.deselectAll')}</Button>
+                      </div>
+                      {inbounds
+                        .filter(ib => !xrayFilterSearch || (ib.remark || `#${ib.id}`).toLowerCase().includes(xrayFilterSearch.toLowerCase()))
+                        .map((ib) => (
                         <label key={ib.id} className="flex items-center gap-2 py-1 cursor-pointer">
                           <Checkbox
                             checked={xraySelectedInbounds.has(ib.id)}
@@ -527,7 +588,7 @@ export default function NetworkMonitorPage() {
                   <Tooltip formatter={(v) => formatBytes(Number(v))} />
                   <Legend
                     onClick={handleLegendClick(setXrayHidden)}
-                    wrapperStyle={{ fontSize: 12, maxHeight: 60, overflowY: 'auto', cursor: 'pointer' }}
+                    wrapperStyle={{ fontSize: 12, maxHeight: 120, overflowY: 'auto', cursor: 'pointer' }}
                     formatter={(value) => (
                       <span style={{ color: xrayHidden.has(value as string) ? '#ccc' : undefined }}>{value}</span>
                     )}
@@ -549,9 +610,23 @@ export default function NetworkMonitorPage() {
       {/* Forward Latency Chart */}
       <Card>
         <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <CardTitle className="text-lg">{t('monitor.forwardLatency')}</CardTitle>
             <div className="flex items-center gap-2">
+              <div className="flex rounded-md border overflow-hidden">
+                <button
+                  className={`px-3 py-1 text-xs ${latencyGroupMode === 'merged' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+                  onClick={() => setLatencyGroupMode('merged')}
+                >
+                  {t('monitor.mergedView')}
+                </button>
+                <button
+                  className={`px-3 py-1 text-xs ${latencyGroupMode === 'byTunnel' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+                  onClick={() => setLatencyGroupMode('byTunnel')}
+                >
+                  {t('monitor.byTunnelView')}
+                </button>
+              </div>
               <Select value={latencyRange} onValueChange={(v) => setLatencyRange(v)}>
                 <SelectTrigger className="w-24">
                   <SelectValue />
@@ -566,13 +641,29 @@ export default function NetworkMonitorPage() {
               <div className="relative" ref={latencyFilterRef}>
                 <Button variant="outline" size="sm" onClick={() => setLatencyFilterOpen(!latencyFilterOpen)}>
                   <Filter className="h-4 w-4 mr-1" />
-                  {selectedForwards.size === forwards.filter(f => f.status === 1).length
+                  {selectedForwards.size === activeForwards.length
                     ? t('monitor.allForwards')
                     : t('monitor.selected', { count: selectedForwards.size })}
                 </Button>
                 {latencyFilterOpen && (
-                  <div className="absolute right-0 top-full mt-1 z-50 bg-popover border rounded-md shadow-md p-3 min-w-[200px]">
-                    {forwards.filter(f => f.status === 1).map((f) => (
+                  <div className="absolute right-0 top-full mt-1 z-50 bg-popover border rounded-md shadow-md p-3 min-w-[200px] max-h-[300px] overflow-y-auto">
+                    <Input
+                      placeholder={t('monitor.searchForward')}
+                      value={latencyFilterSearch}
+                      onChange={e => setLatencyFilterSearch(e.target.value)}
+                      className="mb-2 h-8 text-sm"
+                    />
+                    <div className="flex gap-1 mb-2">
+                      <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => {
+                        setSelectedForwards(new Set(activeForwards.map(f => f.id)));
+                      }}>{t('user.selectAll')}</Button>
+                      <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => {
+                        setSelectedForwards(new Set());
+                      }}>{t('user.deselectAll')}</Button>
+                    </div>
+                    {activeForwards
+                      .filter(f => !latencyFilterSearch || f.name.toLowerCase().includes(latencyFilterSearch.toLowerCase()))
+                      .map((f) => (
                       <label key={f.id} className="flex items-center gap-2 py-1 cursor-pointer">
                         <Checkbox
                           checked={selectedForwards.has(f.id)}
@@ -588,7 +679,7 @@ export default function NetworkMonitorPage() {
                         <span className="text-sm">{f.name}</span>
                       </label>
                     ))}
-                    {forwards.filter(f => f.status === 1).length === 0 && (
+                    {activeForwards.length === 0 && (
                       <p className="text-sm text-muted-foreground">{t('monitor.noRunningForwards')}</p>
                     )}
                   </div>
@@ -598,28 +689,27 @@ export default function NetworkMonitorPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {forwards.filter(f => f.status === 1).length === 0 ? (
+          {activeForwards.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">{t('monitor.noRunningForwards')}</div>
           ) : selectedForwards.size === 0 ? (
             <div className="text-center py-12 text-muted-foreground">{t('monitor.selectAtLeast')}</div>
           ) : latencyChartData.length > 0 ? (
             <>
-              <ResponsiveContainer width="100%" height={350}>
-                <LineChart data={latencyChartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="time" fontSize={11} />
-                  <YAxis fontSize={11} unit="ms" />
-                  <Tooltip formatter={(v: any) => (v != null ? `${v}ms` : t('monitor.timeout'))} />
-                  <Legend
-                    onClick={handleLegendClick(setLatencyHidden)}
-                    wrapperStyle={{ fontSize: 12, maxHeight: 60, overflowY: 'auto', cursor: 'pointer' }}
-                    formatter={(value) => (
-                      <span style={{ color: latencyHidden.has(value as string) ? '#ccc' : undefined }}>{value}</span>
-                    )}
-                  />
-                  {forwards
-                    .filter((f) => f.status === 1 && selectedForwards.has(f.id))
-                    .map((f, i) => (
+              {latencyGroupMode === 'merged' ? (
+                <ResponsiveContainer width="100%" height={350}>
+                  <LineChart data={latencyChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="time" fontSize={11} />
+                    <YAxis fontSize={11} unit="ms" />
+                    <Tooltip formatter={(v: any) => (v != null ? `${Number(v).toFixed(1)}ms` : t('monitor.timeout'))} />
+                    <Legend
+                      onClick={handleLegendClick(setLatencyHidden)}
+                      wrapperStyle={{ fontSize: 12, maxHeight: 120, overflowY: 'auto', cursor: 'pointer' }}
+                      formatter={(value) => (
+                        <span style={{ color: latencyHidden.has(value as string) ? '#ccc' : undefined }}>{value}</span>
+                      )}
+                    />
+                    {selectedActiveForwards.map((f, i) => (
                       <Line
                         key={f.id}
                         type="monotone"
@@ -630,25 +720,70 @@ export default function NetworkMonitorPage() {
                         hide={latencyHidden.has(f.name)}
                       />
                     ))}
-                </LineChart>
-              </ResponsiveContainer>
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="space-y-6">
+                  {tunnelGroups.order.map(tunnelName => {
+                    const groupFwds = tunnelGroups.groups[tunnelName];
+                    // Filter chart data to only include keys from this tunnel group
+                    const tunnelChartData = latencyChartData.map(row => {
+                      const filtered: Record<string, any> = { time: row.time };
+                      for (const f of groupFwds) {
+                        if (row[f.name] !== undefined) filtered[f.name] = row[f.name];
+                      }
+                      return filtered;
+                    });
+                    return (
+                      <div key={tunnelName}>
+                        <h4 className="text-sm font-semibold text-muted-foreground mb-2">{tunnelName}</h4>
+                        <ResponsiveContainer width="100%" height={250}>
+                          <LineChart data={tunnelChartData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="time" fontSize={11} />
+                            <YAxis fontSize={11} unit="ms" />
+                            <Tooltip formatter={(v: any) => (v != null ? `${Number(v).toFixed(1)}ms` : t('monitor.timeout'))} />
+                            <Legend
+                              onClick={handleLegendClick(setLatencyHidden)}
+                              wrapperStyle={{ fontSize: 12, maxHeight: 120, overflowY: 'auto', cursor: 'pointer' }}
+                              formatter={(value) => (
+                                <span style={{ color: latencyHidden.has(value as string) ? '#ccc' : undefined }}>{value}</span>
+                              )}
+                            />
+                            {groupFwds.map((f, i) => (
+                              <Line
+                                key={f.id}
+                                type="monotone"
+                                dataKey={f.name}
+                                stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                                dot={false}
+                                connectNulls={false}
+                                hide={latencyHidden.has(f.name)}
+                              />
+                            ))}
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* Statistics Summary */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mt-4">
-                {forwards
-                  .filter((f) => f.status === 1 && selectedForwards.has(f.id))
-                  .map((f) => {
+              {latencyGroupMode === 'merged' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mt-4">
+                  {selectedActiveForwards.map((f) => {
                     const stat = latencyStatsData[f.id];
                     return (
                       <div key={f.id} className="border rounded-md p-3 space-y-1">
                         <div className="font-medium text-sm truncate">{f.name}</div>
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <span>{t('monitor.latestLatency')}</span>
-                          <span>{stat ? (stat.last >= 0 ? `${stat.last}ms` : t('monitor.timeout')) : '-'}</span>
+                          <span>{stat ? (stat.last >= 0 ? `${stat.last.toFixed(1)}ms` : t('monitor.timeout')) : '-'}</span>
                         </div>
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <span>{t('monitor.avgLatency')}</span>
-                          <span>{stat ? (stat.avg >= 0 ? `${stat.avg}ms` : '-') : '-'}</span>
+                          <span>{stat ? (stat.avg >= 0 ? `${stat.avg.toFixed(1)}ms` : '-') : '-'}</span>
                         </div>
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-muted-foreground">{t('monitor.successRate')}</span>
@@ -663,7 +798,47 @@ export default function NetworkMonitorPage() {
                       </div>
                     );
                   })}
-              </div>
+                </div>
+              ) : (
+                <div className="space-y-4 mt-4">
+                  {tunnelGroups.order.map(tunnelName => {
+                    const groupFwds = tunnelGroups.groups[tunnelName];
+                    return (
+                      <div key={tunnelName}>
+                        <h4 className="text-sm font-semibold text-muted-foreground mb-2">{tunnelName}</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                          {groupFwds.map((f) => {
+                            const stat = latencyStatsData[f.id];
+                            return (
+                              <div key={f.id} className="border rounded-md p-3 space-y-1">
+                                <div className="font-medium text-sm truncate">{f.name}</div>
+                                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                  <span>{t('monitor.latestLatency')}</span>
+                                  <span>{stat ? (stat.last >= 0 ? `${stat.last.toFixed(1)}ms` : t('monitor.timeout')) : '-'}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                  <span>{t('monitor.avgLatency')}</span>
+                                  <span>{stat ? (stat.avg >= 0 ? `${stat.avg.toFixed(1)}ms` : '-') : '-'}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-muted-foreground">{t('monitor.successRate')}</span>
+                                  {stat ? (
+                                    <Badge variant={stat.successRate >= 80 ? 'default' : 'destructive'} className="text-xs">
+                                      {stat.successRate}%
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-muted-foreground">-</span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </>
           ) : (
             <div className="text-center py-12 text-muted-foreground">{t('monitor.noLatencyData')}</div>

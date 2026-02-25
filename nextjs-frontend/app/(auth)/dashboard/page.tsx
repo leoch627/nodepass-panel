@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { ArrowRightLeft, Server, Users, Activity, AlertTriangle, ExternalLink, RefreshCw } from 'lucide-react';
+import { ArrowRightLeft, Server, Users, Activity, AlertTriangle, ExternalLink, RefreshCw, Calendar } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/use-auth';
 import { getDashboardStats, checkUpdate, selfUpdate, UpdateInfo } from '@/lib/api/system';
 import {
@@ -132,8 +132,8 @@ function AdminDashboard({ stats, updateInfo }: { stats: any; updateInfo: UpdateI
         </Card>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* Stats Cards - 5 columns */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">{t('dashboard.nodes')}</CardTitle>
@@ -178,12 +178,19 @@ function AdminDashboard({ stats, updateInfo }: { stats: any; updateInfo: UpdateI
               <div>GOST: {formatBytes(stats.todayTraffic || 0)}</div>
               <div>Xray: {formatBytes(stats.todayXrayTraffic || 0)}</div>
             </div>
-            {((stats.totalGostFlow || 0) + (stats.totalXrayFlow || 0)) > 0 && (
-              <div className="text-xs text-muted-foreground mt-2 pt-2 border-t space-y-0.5">
-                <div>{t('dashboard.totalAccumulated')}: {formatBytes((stats.totalGostFlow || 0) + (stats.totalXrayFlow || 0))}</div>
-                <div>GOST: {formatBytes(stats.totalGostFlow || 0)} / Xray: {formatBytes(stats.totalXrayFlow || 0)}</div>
-              </div>
-            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">{t('dashboard.monthlyTraffic')}</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatBytes((stats.monthlyGostTraffic || 0) + (stats.monthlyXrayTraffic || 0))}</div>
+            <div className="text-xs text-muted-foreground space-y-0.5 mt-1">
+              <div>GOST: {formatBytes(stats.monthlyGostTraffic || 0)}</div>
+              <div>Xray: {formatBytes(stats.monthlyXrayTraffic || 0)}</div>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -249,37 +256,37 @@ function AdminDashboard({ stats, updateInfo }: { stats: any; updateInfo: UpdateI
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* Node Overview Table */}
+        {/* Node Traffic Ranking */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-medium">{t('dashboard.nodeOverview')}</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('dashboard.nodeTrafficRank')}</CardTitle>
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>{t('dashboard.rank')}</TableHead>
                   <TableHead>{t('dashboard.nodeName')}</TableHead>
-                  <TableHead>{t('dashboard.ip')}</TableHead>
-                  <TableHead>{t('common.status')}</TableHead>
-                  <TableHead>{t('dashboard.version')}</TableHead>
+                  <TableHead>{t('dashboard.monthlyFlow')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(stats.nodeList || []).length === 0 ? (
+                {(stats.nodeTrafficRank || []).length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-4 text-muted-foreground">{t('dashboard.noNodes')}</TableCell>
+                    <TableCell colSpan={3} className="text-center py-4 text-muted-foreground">{t('common.noData')}</TableCell>
                   </TableRow>
                 ) : (
-                  (stats.nodeList || []).map((node: any) => (
-                    <TableRow key={node.id}>
-                      <TableCell className="font-medium max-w-[100px] truncate">{node.name}</TableCell>
-                      <TableCell className="text-sm max-w-[160px] truncate font-mono text-xs" title={node.serverIp}>{node.serverIp}</TableCell>
+                  (stats.nodeTrafficRank || []).map((node: any, idx: number) => (
+                    <TableRow key={node.nodeId}>
+                      <TableCell className="font-medium">{idx + 1}</TableCell>
+                      <TableCell className="font-medium max-w-[100px] truncate">{node.nodeName}</TableCell>
                       <TableCell>
-                        <Badge variant={node.status === 1 ? 'default' : 'destructive'}>
-                          {node.status === 1 ? t('common.online') : t('common.offline')}
-                        </Badge>
+                        <div className="text-sm">{formatBytes(node.totalFlow || 0)}</div>
+                        <div className="text-xs text-muted-foreground space-y-0.5">
+                          <div>GOST: {formatBytes(node.gostFlow || 0)}</div>
+                          <div>Xray: {formatBytes(node.xrayFlow || 0)}</div>
+                        </div>
                       </TableCell>
-                      <TableCell className="text-sm">{node.version || '-'}</TableCell>
                     </TableRow>
                   ))
                 )}

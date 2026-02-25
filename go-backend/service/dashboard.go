@@ -34,15 +34,11 @@ func GetAdminDashboardStats() dto.R {
 	trafficData := getTrafficData(0)
 	xrayData := getXrayTrafficData(0)
 
-	// Total accumulated traffic from all users (real-time, not snapshot-based)
-	type flowSum struct {
-		Total int64
-	}
-	var totalGost, totalXray flowSum
-	DB.Model(&model.User{}).Where("role_id != 0").
-		Select("COALESCE(SUM(in_flow + out_flow), 0) as total").Scan(&totalGost)
-	DB.Model(&model.User{}).Where("role_id != 0").
-		Select("COALESCE(SUM(xray_in_flow + xray_out_flow), 0) as total").Scan(&totalXray)
+	// Monthly traffic
+	monthlyGost, monthlyXray := getMonthlyTraffic()
+
+	// Node traffic ranking
+	nodeTrafficRank := getNodeTrafficRanking()
 
 	// Top 5 users by traffic (GOST + Xray combined)
 	type TopUser struct {
@@ -59,34 +55,18 @@ func GetAdminDashboardStats() dto.R {
 		Limit(5).
 		Find(&topUsers)
 
-	// Node list — reuse allNodes with live WS status
-	nodeList := make([]map[string]interface{}, 0, len(allNodes))
-	for _, n := range allNodes {
-		status := n.Status
-		if pkg.WS != nil && pkg.WS.IsNodeOnline(n.ID) {
-			status = 1
-		}
-		nodeList = append(nodeList, map[string]interface{}{
-			"id":       n.ID,
-			"name":     n.Name,
-			"serverIp": n.ServerIp,
-			"status":   status,
-			"version":  n.Version,
-		})
-	}
-
 	return dto.Ok(map[string]interface{}{
-		"nodes":              map[string]int64{"total": totalNodes, "online": onlineNodes},
-		"users":              map[string]int64{"total": totalUsers},
-		"forwards":           map[string]int64{"total": totalForwards, "active": activeForwards},
-		"todayTraffic":       trafficData.todayFlow,
-		"trafficHistory":     trafficData.history,
-		"todayXrayTraffic":   xrayData.todayFlow,
-		"xrayTrafficHistory": xrayData.history,
-		"totalGostFlow":      totalGost.Total,
-		"totalXrayFlow":      totalXray.Total,
-		"topUsers":           topUsers,
-		"nodeList":           nodeList,
+		"nodes":               map[string]int64{"total": totalNodes, "online": onlineNodes},
+		"users":               map[string]int64{"total": totalUsers},
+		"forwards":            map[string]int64{"total": totalForwards, "active": activeForwards},
+		"todayTraffic":        trafficData.todayFlow,
+		"trafficHistory":      trafficData.history,
+		"todayXrayTraffic":    xrayData.todayFlow,
+		"xrayTrafficHistory":  xrayData.history,
+		"monthlyGostTraffic":  monthlyGost,
+		"monthlyXrayTraffic":  monthlyXray,
+		"topUsers":            topUsers,
+		"nodeTrafficRank":     nodeTrafficRank,
 	})
 }
 
@@ -424,6 +404,333 @@ func getUserFlowData(userId int64) (gostData trafficData, xrayData trafficData) 
 
 	return trafficData{history: gostHistory, todayFlow: gostTotal},
 		trafficData{history: xrayHistory, todayFlow: xrayTotal}
+}
+
+// getMonthlyTraffic returns this calendar month's GOST + Xray traffic.
+func getMonthlyTraffic() (gostMonthly int64, xrayMonthly int64) {
+	now := time.Now()
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).Unix()
+	cutoff := monthStart - 3600 // one extra hour for delta base
+
+	// GOST monthly traffic
+	var gostRecords []model.StatisticsForwardFlow
+	DB.Where("record_time >= ?", cutoff).Order("record_time ASC").Find(&gostRecords)
+
+	if len(gostRecords) > 0 {
+		bucketSize := int64(3600)
+		type fwBucketKey struct {
+			ForwardId int64
+			Bucket    int64
+		}
+		fwBucketSnapshot := make(map[fwBucketKey]int64)
+		for _, r := range gostRecords {
+			key := fwBucketKey{r.ForwardId, (r.RecordTime / bucketSize) * bucketSize}
+			fwBucketSnapshot[key] = r.InFlow + r.OutFlow
+		}
+
+		fwIds := make(map[int64]bool)
+		allBuckets := make(map[int64]bool)
+		for k := range fwBucketSnapshot {
+			fwIds[k.ForwardId] = true
+			allBuckets[k.Bucket] = true
+		}
+		sortedBuckets := make([]int64, 0, len(allBuckets))
+		for b := range allBuckets {
+			sortedBuckets = append(sortedBuckets, b)
+		}
+		sort.Slice(sortedBuckets, func(i, j int) bool { return sortedBuckets[i] < sortedBuckets[j] })
+
+		for fwId := range fwIds {
+			var prev int64
+			firstSeen := false
+			for _, bt := range sortedBuckets {
+				snap, ok := fwBucketSnapshot[fwBucketKey{fwId, bt}]
+				if !ok {
+					continue
+				}
+				if !firstSeen {
+					prev = snap
+					firstSeen = true
+					continue
+				}
+				if bt < monthStart {
+					prev = snap
+					continue
+				}
+				delta := snap - prev
+				if delta < 0 {
+					delta = 0
+				}
+				gostMonthly += delta
+				prev = snap
+			}
+		}
+	}
+
+	// Xray monthly traffic
+	var xrayRecords []model.StatisticsXrayFlow
+	DB.Where("record_time >= ?", cutoff).Order("record_time ASC").Find(&xrayRecords)
+
+	if len(xrayRecords) > 0 {
+		bucketSize := int64(3600)
+		type ibBucketKey struct {
+			InboundId int64
+			Bucket    int64
+		}
+		ibBucketSnapshot := make(map[ibBucketKey]int64)
+		for _, r := range xrayRecords {
+			key := ibBucketKey{r.InboundId, (r.RecordTime / bucketSize) * bucketSize}
+			ibBucketSnapshot[key] = r.UpFlow + r.DownFlow
+		}
+
+		ibIds := make(map[int64]bool)
+		allBuckets := make(map[int64]bool)
+		for k := range ibBucketSnapshot {
+			ibIds[k.InboundId] = true
+			allBuckets[k.Bucket] = true
+		}
+		sortedBuckets := make([]int64, 0, len(allBuckets))
+		for b := range allBuckets {
+			sortedBuckets = append(sortedBuckets, b)
+		}
+		sort.Slice(sortedBuckets, func(i, j int) bool { return sortedBuckets[i] < sortedBuckets[j] })
+
+		for ibId := range ibIds {
+			var prev int64
+			firstSeen := false
+			for _, bt := range sortedBuckets {
+				snap, ok := ibBucketSnapshot[ibBucketKey{ibId, bt}]
+				if !ok {
+					continue
+				}
+				if !firstSeen {
+					prev = snap
+					firstSeen = true
+					continue
+				}
+				if bt < monthStart {
+					prev = snap
+					continue
+				}
+				delta := snap - prev
+				if delta < 0 {
+					delta = 0
+				}
+				xrayMonthly += delta
+				prev = snap
+			}
+		}
+	}
+
+	return
+}
+
+// getNodeTrafficRanking returns per-node monthly traffic ranking.
+func getNodeTrafficRanking() []map[string]interface{} {
+	now := time.Now()
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).Unix()
+	cutoff := monthStart - 3600
+
+	// Build node name map
+	var allNodes []model.Node
+	DB.Find(&allNodes)
+	nodeNameMap := make(map[int64]string)
+	for _, n := range allNodes {
+		nodeNameMap[n.ID] = n.Name
+	}
+
+	// GOST: Forward → Tunnel(tunnel_id) → Node(in_node_id)
+	type fwTunnel struct {
+		ForwardId int64
+		NodeId    int64
+	}
+	var fwTunnelRows []fwTunnel
+	DB.Model(&model.Forward{}).
+		Select("forward.id as forward_id, tunnel.in_node_id as node_id").
+		Joins("JOIN tunnel ON tunnel.id = forward.tunnel_id").
+		Find(&fwTunnelRows)
+
+	fwToNode := make(map[int64]int64)
+	for _, ft := range fwTunnelRows {
+		fwToNode[ft.ForwardId] = ft.NodeId
+	}
+
+	// Compute per-forward GOST monthly delta
+	var gostRecords []model.StatisticsForwardFlow
+	DB.Where("record_time >= ?", cutoff).Order("record_time ASC").Find(&gostRecords)
+
+	nodeGostFlow := make(map[int64]int64)
+	if len(gostRecords) > 0 {
+		bucketSize := int64(3600)
+		type fwBucketKey struct {
+			ForwardId int64
+			Bucket    int64
+		}
+		fwBucketSnapshot := make(map[fwBucketKey]int64)
+		for _, r := range gostRecords {
+			key := fwBucketKey{r.ForwardId, (r.RecordTime / bucketSize) * bucketSize}
+			fwBucketSnapshot[key] = r.InFlow + r.OutFlow
+		}
+
+		fwIds := make(map[int64]bool)
+		allBuckets := make(map[int64]bool)
+		for k := range fwBucketSnapshot {
+			fwIds[k.ForwardId] = true
+			allBuckets[k.Bucket] = true
+		}
+		sortedBuckets := make([]int64, 0, len(allBuckets))
+		for b := range allBuckets {
+			sortedBuckets = append(sortedBuckets, b)
+		}
+		sort.Slice(sortedBuckets, func(i, j int) bool { return sortedBuckets[i] < sortedBuckets[j] })
+
+		fwFlow := make(map[int64]int64) // per-forward monthly flow
+		for fwId := range fwIds {
+			var prev int64
+			firstSeen := false
+			for _, bt := range sortedBuckets {
+				snap, ok := fwBucketSnapshot[fwBucketKey{fwId, bt}]
+				if !ok {
+					continue
+				}
+				if !firstSeen {
+					prev = snap
+					firstSeen = true
+					continue
+				}
+				if bt < monthStart {
+					prev = snap
+					continue
+				}
+				delta := snap - prev
+				if delta < 0 {
+					delta = 0
+				}
+				fwFlow[fwId] += delta
+				prev = snap
+			}
+		}
+		for fwId, flow := range fwFlow {
+			if nodeId, ok := fwToNode[fwId]; ok {
+				nodeGostFlow[nodeId] += flow
+			}
+		}
+	}
+
+	// Xray: XrayInbound has nodeId directly
+	type ibNode struct {
+		InboundId int64
+		NodeId    int64
+	}
+	var ibNodeRows []ibNode
+	DB.Model(&model.XrayInbound{}).Select("id as inbound_id, node_id").Find(&ibNodeRows)
+	ibToNode := make(map[int64]int64)
+	for _, in := range ibNodeRows {
+		ibToNode[in.InboundId] = in.NodeId
+	}
+
+	var xrayRecords []model.StatisticsXrayFlow
+	DB.Where("record_time >= ?", cutoff).Order("record_time ASC").Find(&xrayRecords)
+
+	nodeXrayFlow := make(map[int64]int64)
+	if len(xrayRecords) > 0 {
+		bucketSize := int64(3600)
+		type ibBucketKey struct {
+			InboundId int64
+			Bucket    int64
+		}
+		ibBucketSnapshot := make(map[ibBucketKey]int64)
+		for _, r := range xrayRecords {
+			key := ibBucketKey{r.InboundId, (r.RecordTime / bucketSize) * bucketSize}
+			ibBucketSnapshot[key] = r.UpFlow + r.DownFlow
+		}
+
+		ibIds := make(map[int64]bool)
+		allBuckets := make(map[int64]bool)
+		for k := range ibBucketSnapshot {
+			ibIds[k.InboundId] = true
+			allBuckets[k.Bucket] = true
+		}
+		sortedBuckets := make([]int64, 0, len(allBuckets))
+		for b := range allBuckets {
+			sortedBuckets = append(sortedBuckets, b)
+		}
+		sort.Slice(sortedBuckets, func(i, j int) bool { return sortedBuckets[i] < sortedBuckets[j] })
+
+		ibFlow := make(map[int64]int64)
+		for ibId := range ibIds {
+			var prev int64
+			firstSeen := false
+			for _, bt := range sortedBuckets {
+				snap, ok := ibBucketSnapshot[ibBucketKey{ibId, bt}]
+				if !ok {
+					continue
+				}
+				if !firstSeen {
+					prev = snap
+					firstSeen = true
+					continue
+				}
+				if bt < monthStart {
+					prev = snap
+					continue
+				}
+				delta := snap - prev
+				if delta < 0 {
+					delta = 0
+				}
+				ibFlow[ibId] += delta
+				prev = snap
+			}
+		}
+		for ibId, flow := range ibFlow {
+			if nodeId, ok := ibToNode[ibId]; ok {
+				nodeXrayFlow[nodeId] += flow
+			}
+		}
+	}
+
+	// Merge and build ranking
+	allNodeIds := make(map[int64]bool)
+	for id := range nodeGostFlow {
+		allNodeIds[id] = true
+	}
+	for id := range nodeXrayFlow {
+		allNodeIds[id] = true
+	}
+
+	type nodeRank struct {
+		NodeId    int64
+		NodeName  string
+		GostFlow  int64
+		XrayFlow  int64
+		TotalFlow int64
+	}
+	ranking := make([]nodeRank, 0, len(allNodeIds))
+	for id := range allNodeIds {
+		gf := nodeGostFlow[id]
+		xf := nodeXrayFlow[id]
+		ranking = append(ranking, nodeRank{
+			NodeId:    id,
+			NodeName:  nodeNameMap[id],
+			GostFlow:  gf,
+			XrayFlow:  xf,
+			TotalFlow: gf + xf,
+		})
+	}
+	sort.Slice(ranking, func(i, j int) bool { return ranking[i].TotalFlow > ranking[j].TotalFlow })
+
+	result := make([]map[string]interface{}, 0, len(ranking))
+	for _, r := range ranking {
+		result = append(result, map[string]interface{}{
+			"nodeId":    r.NodeId,
+			"nodeName":  r.NodeName,
+			"gostFlow":  r.GostFlow,
+			"xrayFlow":  r.XrayFlow,
+			"totalFlow": r.TotalFlow,
+		})
+	}
+	return result
 }
 
 func buildEmptyTrafficHistory() []map[string]interface{} {

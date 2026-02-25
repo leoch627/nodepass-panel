@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, Pause, Play, Edit2, Stethoscope, CheckCircle2, XCircle } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, Trash2, Pause, Play, Edit2, Stethoscope, CheckCircle2, XCircle, ChevronRight, ChevronDown, LayoutGrid, TableProperties } from 'lucide-react';
 import { toast } from 'sonner';
 import { getForwardList, createForward, updateForward, deleteForward, pauseForwardService, resumeForwardService, diagnoseForward } from '@/lib/api/forward';
 import { getLatencyHistory } from '@/lib/api/monitor';
@@ -19,7 +20,7 @@ import { useAuth } from '@/lib/hooks/use-auth';
 import { useTranslation } from '@/lib/i18n';
 
 export default function ForwardPage() {
-  const { isAdmin, gostEnabled } = useAuth();
+  const { isAdmin, gostEnabled, username } = useAuth();
   const { t } = useTranslation();
   const [forwards, setForwards] = useState<any[]>([]);
   const [tunnels, setTunnels] = useState<any[]>([]);
@@ -34,6 +35,34 @@ export default function ForwardPage() {
   const [diagnosing, setDiagnosing] = useState<number | null>(null);
   const [latencyMap, setLatencyMap] = useState<Record<number, { latency: number; success: boolean } | null>>({});
   const initialLoad = useRef(true);
+
+  // Collapsible tunnel groups
+  const [collapsedTunnels, setCollapsedTunnels] = useState<Set<string>>(new Set());
+
+  // Card/Table view toggle
+  const [viewMode, setViewMode] = useState<'card' | 'table'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('forward_view') as 'card' | 'table') || 'table';
+    }
+    return 'table';
+  });
+
+  // Admin/User tab
+  const [activeTab, setActiveTab] = useState<'admin' | 'user'>('admin');
+
+  const handleViewMode = (mode: 'card' | 'table') => {
+    setViewMode(mode);
+    localStorage.setItem('forward_view', mode);
+  };
+
+  const toggleCollapse = (tunnelId: string) => {
+    setCollapsedTunnels(prev => {
+      const next = new Set(prev);
+      if (next.has(tunnelId)) next.delete(tunnelId);
+      else next.add(tunnelId);
+      return next;
+    });
+  };
 
   const loadLatency = useCallback(async (fwds: any[]) => {
     const active = fwds.filter((f: any) => f.status === 1);
@@ -181,6 +210,232 @@ export default function ForwardPage() {
     );
   }
 
+  const renderLatencyCell = (f: any) => (
+    f.status === 1 && latencyMap[f.id] ? (
+      latencyMap[f.id]!.success ? (
+        <span className={`font-mono ${latencyMap[f.id]!.latency > 500 ? 'text-red-600' : latencyMap[f.id]!.latency > 200 ? 'text-orange-600' : 'text-green-600'}`}>
+          {latencyMap[f.id]!.latency.toFixed(1)}ms
+        </span>
+      ) : (
+        <span className="text-destructive">{t('forward.timeout')}</span>
+      )
+    ) : (
+      <span className="text-muted-foreground">-</span>
+    )
+  );
+
+  const renderActionButtons = (f: any) => (
+    <div className="flex gap-1">
+      <Button variant="ghost" size="icon" onClick={() => handleEdit(f)}><Edit2 className="h-4 w-4" /></Button>
+      {f.status === 1 ? (
+        <Button variant="ghost" size="icon" onClick={() => handlePause(f.id)}><Pause className="h-4 w-4" /></Button>
+      ) : (
+        <Button variant="ghost" size="icon" onClick={() => handleResume(f.id)}><Play className="h-4 w-4" /></Button>
+      )}
+      <Button variant="ghost" size="icon" onClick={() => handleDiagnose(f.id)} disabled={diagnosing === f.id}>
+        <Stethoscope className={`h-4 w-4 ${diagnosing === f.id ? 'animate-pulse' : ''}`} />
+      </Button>
+      <Button variant="ghost" size="icon" onClick={() => handleDelete(f.id)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
+    </div>
+  );
+
+  const renderForwardList = (list: any[]) => {
+    const isFiltered = filterTunnelId && filterTunnelId !== 'all';
+    const filtered = isFiltered
+      ? list.filter(f => f.tunnelId?.toString() === filterTunnelId)
+      : list;
+
+    if (loading) {
+      return viewMode === 'table' ? (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableBody>
+                <TableRow><TableCell colSpan={isAdmin ? 9 : 8} className="text-center py-8">{t('common.loading')}</TableCell></TableRow>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="text-center py-8 text-muted-foreground">{t('common.loading')}</div>
+      );
+    }
+
+    if (filtered.length === 0) {
+      return viewMode === 'table' ? (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableBody>
+                <TableRow><TableCell colSpan={isAdmin ? 9 : 8} className="text-center py-8 text-muted-foreground">{t('common.noData')}</TableCell></TableRow>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="text-center py-8 text-muted-foreground">{t('common.noData')}</div>
+      );
+    }
+
+    // Group by tunnel
+    const groups: Record<string, any[]> = {};
+    const order: string[] = [];
+    for (const f of filtered) {
+      const tid = String(f.tunnelId);
+      if (!groups[tid]) {
+        groups[tid] = [];
+        order.push(tid);
+      }
+      groups[tid].push(f);
+    }
+
+    const showGroups = !isFiltered && tunnels.length > 1;
+    const colSpan = isAdmin ? 9 : 8;
+
+    if (viewMode === 'table') {
+      return (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('forward.name')}</TableHead>
+                  {isAdmin && <TableHead>{t('forward.user')}</TableHead>}
+                  <TableHead>{t('forward.tunnel')}</TableHead>
+                  <TableHead>{t('forward.entryPort')}</TableHead>
+                  <TableHead>{t('forward.targetAddr')}</TableHead>
+                  <TableHead>{t('forward.traffic')}</TableHead>
+                  <TableHead>{t('forward.latency')}</TableHead>
+                  <TableHead>{t('forward.status')}</TableHead>
+                  <TableHead>{t('forward.actions')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {showGroups ? (
+                  order.map(tid => {
+                    const groupForwards = groups[tid];
+                    const tunnelName = groupForwards[0]?.tunnelName || tid;
+                    const isCollapsed = collapsedTunnels.has(tid);
+                    return [
+                      <TableRow key={`group-${tid}`} className="bg-muted/50 hover:bg-muted/50 cursor-pointer" onClick={() => toggleCollapse(tid)}>
+                        <TableCell colSpan={colSpan} className="py-1.5 text-xs font-semibold text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                            {tunnelName} ({groupForwards.length})
+                          </div>
+                        </TableCell>
+                      </TableRow>,
+                      ...(!isCollapsed ? groupForwards.map((f: any) => (
+                        <TableRow key={f.id}>
+                          <TableCell className="font-medium">{f.name}</TableCell>
+                          {isAdmin && <TableCell className="text-sm text-muted-foreground">{f.userName || '-'}</TableCell>}
+                          <TableCell>{f.tunnelName}</TableCell>
+                          <TableCell>{f.inIp}:{f.inPort}</TableCell>
+                          <TableCell className="max-w-[200px] text-sm whitespace-pre-line">{f.remoteAddr?.includes(',') ? f.remoteAddr.split(',').join('\n') : f.remoteAddr}</TableCell>
+                          <TableCell className="text-xs">{formatBytes(f.inFlow)} / {formatBytes(f.outFlow)}</TableCell>
+                          <TableCell className="text-xs">{renderLatencyCell(f)}</TableCell>
+                          <TableCell>
+                            <Badge variant={f.status === 1 ? 'default' : f.status === 0 ? 'secondary' : 'destructive'}>
+                              {f.status === 1 ? t('forward.running') : f.status === 0 ? t('forward.paused') : t('forward.error')}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{renderActionButtons(f)}</TableCell>
+                        </TableRow>
+                      )) : []),
+                    ];
+                  })
+                ) : (
+                  filtered.map((f: any) => (
+                    <TableRow key={f.id}>
+                      <TableCell className="font-medium">{f.name}</TableCell>
+                      {isAdmin && <TableCell className="text-sm text-muted-foreground">{f.userName || '-'}</TableCell>}
+                      <TableCell>{f.tunnelName}</TableCell>
+                      <TableCell>{f.inIp}:{f.inPort}</TableCell>
+                      <TableCell className="max-w-[200px] text-sm whitespace-pre-line">{f.remoteAddr?.includes(',') ? f.remoteAddr.split(',').join('\n') : f.remoteAddr}</TableCell>
+                      <TableCell className="text-xs">{formatBytes(f.inFlow)} / {formatBytes(f.outFlow)}</TableCell>
+                      <TableCell className="text-xs">{renderLatencyCell(f)}</TableCell>
+                      <TableCell>
+                        <Badge variant={f.status === 1 ? 'default' : f.status === 0 ? 'secondary' : 'destructive'}>
+                          {f.status === 1 ? t('forward.running') : f.status === 0 ? t('forward.paused') : t('forward.error')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{renderActionButtons(f)}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    // Card view
+    const renderCard = (f: any) => (
+      <Card key={f.id} className="flex flex-col">
+        <CardContent className="p-4 space-y-2 flex-1">
+          <div className="flex items-center justify-between">
+            <span className="font-medium text-sm truncate">{f.name}</span>
+            <Badge variant={f.status === 1 ? 'default' : f.status === 0 ? 'secondary' : 'destructive'} className="text-xs ml-2 flex-shrink-0">
+              {f.status === 1 ? t('forward.running') : f.status === 0 ? t('forward.paused') : t('forward.error')}
+            </Badge>
+          </div>
+          {isAdmin && f.userName && (
+            <div className="text-xs text-muted-foreground">{t('forward.user')}: {f.userName}</div>
+          )}
+          <div className="text-xs text-muted-foreground">{t('forward.tunnel')}: {f.tunnelName}</div>
+          <div className="text-xs font-mono">{f.inIp}:{f.inPort}</div>
+          <div className="text-xs font-mono truncate" title={f.remoteAddr}>{f.remoteAddr}</div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">{formatBytes(f.inFlow)} / {formatBytes(f.outFlow)}</span>
+            <span>{renderLatencyCell(f)}</span>
+          </div>
+          <div className="flex justify-end pt-1">
+            {renderActionButtons(f)}
+          </div>
+        </CardContent>
+      </Card>
+    );
+
+    if (showGroups) {
+      return (
+        <div className="space-y-4">
+          {order.map(tid => {
+            const groupForwards = groups[tid];
+            const tunnelName = groupForwards[0]?.tunnelName || tid;
+            const isCollapsed = collapsedTunnels.has(tid);
+            return (
+              <div key={tid}>
+                <button
+                  className="flex items-center gap-1 text-sm font-semibold text-muted-foreground mb-2 hover:text-foreground"
+                  onClick={() => toggleCollapse(tid)}
+                >
+                  {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  {tunnelName} ({groupForwards.length})
+                </button>
+                {!isCollapsed && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                    {groupForwards.map(renderCard)}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        {filtered.map(renderCard)}
+      </div>
+    );
+  };
+
+  // Compute admin vs user forward lists
+  const adminForwards = isAdmin ? forwards.filter(f => f.userName === username) : forwards;
+  const userForwards = isAdmin ? forwards.filter(f => f.userName !== username) : [];
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -197,116 +452,39 @@ export default function ForwardPage() {
               </SelectContent>
             </Select>
           )}
+          <div className="flex rounded-md border overflow-hidden">
+            <button
+              className={`px-3 py-1.5 text-xs flex items-center gap-1 ${viewMode === 'card' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+              onClick={() => handleViewMode('card')}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              {t('monitor.cardView')}
+            </button>
+            <button
+              className={`px-3 py-1.5 text-xs flex items-center gap-1 ${viewMode === 'table' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+              onClick={() => handleViewMode('table')}
+            >
+              <TableProperties className="h-3.5 w-3.5" />
+              {t('monitor.tableView')}
+            </button>
+          </div>
           <Button onClick={handleCreate}><Plus className="mr-2 h-4 w-4" />{t('forward.createForward')}</Button>
         </div>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('forward.name')}</TableHead>
-                {isAdmin && <TableHead>{t('forward.user')}</TableHead>}
-                <TableHead>{t('forward.tunnel')}</TableHead>
-                <TableHead>{t('forward.entryPort')}</TableHead>
-                <TableHead>{t('forward.targetAddr')}</TableHead>
-                <TableHead>{t('forward.traffic')}</TableHead>
-                <TableHead>{t('forward.latency')}</TableHead>
-                <TableHead>{t('forward.status')}</TableHead>
-                <TableHead>{t('forward.actions')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {(() => {
-                const isFiltered = filterTunnelId && filterTunnelId !== 'all';
-                const filtered = isFiltered
-                  ? forwards.filter(f => f.tunnelId?.toString() === filterTunnelId)
-                  : forwards;
-                const colSpan = isAdmin ? 9 : 8;
-
-                const renderRow = (f: any) => (
-                  <TableRow key={f.id}>
-                    <TableCell className="font-medium">{f.name}</TableCell>
-                    {isAdmin && <TableCell className="text-sm text-muted-foreground">{f.userName || '-'}</TableCell>}
-                    <TableCell>{f.tunnelName}</TableCell>
-                    <TableCell>{f.inIp}:{f.inPort}</TableCell>
-                    <TableCell className="max-w-[200px] text-sm whitespace-pre-line">{f.remoteAddr?.includes(',') ? f.remoteAddr.split(',').join('\n') : f.remoteAddr}</TableCell>
-                    <TableCell className="text-xs">{formatBytes(f.inFlow)} / {formatBytes(f.outFlow)}</TableCell>
-                    <TableCell className="text-xs">
-                      {f.status === 1 && latencyMap[f.id] ? (
-                        latencyMap[f.id]!.success ? (
-                          <span className={`font-mono ${latencyMap[f.id]!.latency > 500 ? 'text-red-600' : latencyMap[f.id]!.latency > 200 ? 'text-orange-600' : 'text-green-600'}`}>
-                            {latencyMap[f.id]!.latency.toFixed(1)}ms
-                          </span>
-                        ) : (
-                          <span className="text-destructive">{t('forward.timeout')}</span>
-                        )
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={f.status === 1 ? 'default' : f.status === 0 ? 'secondary' : 'destructive'}>
-                        {f.status === 1 ? t('forward.running') : f.status === 0 ? t('forward.paused') : t('forward.error')}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(f)}><Edit2 className="h-4 w-4" /></Button>
-                        {f.status === 1 ? (
-                          <Button variant="ghost" size="icon" onClick={() => handlePause(f.id)}><Pause className="h-4 w-4" /></Button>
-                        ) : (
-                          <Button variant="ghost" size="icon" onClick={() => handleResume(f.id)}><Play className="h-4 w-4" /></Button>
-                        )}
-                        <Button variant="ghost" size="icon" onClick={() => handleDiagnose(f.id)} disabled={diagnosing === f.id}>
-                          <Stethoscope className={`h-4 w-4 ${diagnosing === f.id ? 'animate-pulse' : ''}`} />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(f.id)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-
-                if (loading) {
-                  return <TableRow><TableCell colSpan={colSpan} className="text-center py-8">{t('common.loading')}</TableCell></TableRow>;
-                }
-                if (filtered.length === 0) {
-                  return <TableRow><TableCell colSpan={colSpan} className="text-center py-8 text-muted-foreground">{t('common.noData')}</TableCell></TableRow>;
-                }
-
-                // Group by tunnel when showing all (not filtered to specific tunnel)
-                if (!isFiltered && tunnels.length > 1) {
-                  const groups: Record<string, any[]> = {};
-                  const order: string[] = [];
-                  for (const f of filtered) {
-                    const tid = String(f.tunnelId);
-                    if (!groups[tid]) {
-                      groups[tid] = [];
-                      order.push(tid);
-                    }
-                    groups[tid].push(f);
-                  }
-                  return order.map(tid => {
-                    const groupForwards = groups[tid];
-                    const tunnelName = groupForwards[0]?.tunnelName || tid;
-                    return [
-                      <TableRow key={`group-${tid}`} className="bg-muted/50 hover:bg-muted/50">
-                        <TableCell colSpan={colSpan} className="py-1.5 text-xs font-semibold text-muted-foreground">
-                          {tunnelName} ({groupForwards.length})
-                        </TableCell>
-                      </TableRow>,
-                      ...groupForwards.map(renderRow),
-                    ];
-                  });
-                }
-
-                return filtered.map(renderRow);
-              })()}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {isAdmin ? (
+        <div className="space-y-4">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'admin' | 'user')}>
+            <TabsList>
+              <TabsTrigger value="admin">{t('forward.adminForwards')} ({adminForwards.length})</TabsTrigger>
+              <TabsTrigger value="user">{t('forward.userForwards')} ({userForwards.length})</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          {activeTab === 'admin' ? renderForwardList(adminForwards) : renderForwardList(userForwards)}
+        </div>
+      ) : (
+        renderForwardList(forwards)
+      )}
 
       {/* Diagnose Dialog */}
       <Dialog open={diagnoseDialogOpen} onOpenChange={setDiagnoseDialogOpen}>
@@ -387,12 +565,9 @@ export default function ForwardPage() {
               const selectedTunnel = tunnels.find((t: any) => t.id?.toString() === form.tunnelId);
               const entryNode = selectedTunnel ? nodes.find((n: any) => n.id === selectedTunnel.inNodeId) : null;
               const ifaces: { name: string; ips: string[] }[] = entryNode?.interfaces || [];
-              // Flatten all IPs from all interfaces for the IP-based dropdown
               const allIps = ifaces.flatMap((iface: any) => iface.ips || []);
-              // Build listenIp options: check if current value is a known IP or NIC-derived
               const knownValues = ['', '::', '0.0.0.0', ...allIps];
               const isCustomListenIp = form.listenIp && !knownValues.includes(form.listenIp);
-              // Build interfaceName options: check if current value is a known NIC or IP
               const nicNames = ifaces.map((iface: any) => iface.name);
               const knownIfaceValues = [...nicNames, ...allIps];
               const isCustomInterface = form.interfaceName && !knownIfaceValues.includes(form.interfaceName);

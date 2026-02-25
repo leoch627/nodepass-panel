@@ -139,6 +139,9 @@ const en: Translations = {
     totalFlow: 'Total {flow} GB',
     totalAccumulated: 'Total Accumulated',
     expireTime: 'Expires',
+    monthlyTraffic: 'Monthly Traffic',
+    nodeTrafficRank: 'Node Traffic Ranking',
+    monthlyFlow: 'Monthly Traffic',
   },
   forward: {
     title: 'Forward Management',
@@ -188,6 +191,8 @@ const en: Translations = {
     failed: 'Failed',
     selectEntry: 'Select entry',
     user: 'User',
+    adminForwards: 'Admin Forwards',
+    userForwards: 'User Forwards',
   },
   tunnel: {
     title: 'Tunnel Management',
@@ -429,6 +434,9 @@ const en: Translations = {
     cardView: 'Cards',
     tableView: 'Table',
     ungrouped: 'Ungrouped',
+    searchForward: 'Search forwards...',
+    mergedView: 'Merged View',
+    byTunnelView: 'By Tunnel',
   },
   config: {
     title: 'System Settings',

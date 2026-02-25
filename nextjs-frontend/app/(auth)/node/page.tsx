@@ -30,22 +30,6 @@ function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-function formatBytes(bytes: number) {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(Math.abs(bytes)) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
-function formatSpeed(bytesPerSec: number) {
-  if (bytesPerSec <= 0) return '0 B/s';
-  const k = 1024;
-  const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
-  const i = Math.floor(Math.log(Math.abs(bytesPerSec)) / Math.log(k));
-  return parseFloat((bytesPerSec / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[Math.min(i, sizes.length - 1)];
-}
-
 export default function NodePage() {
   const { isAdmin } = useAuth();
   const { t } = useTranslation();
@@ -64,10 +48,7 @@ export default function NodePage() {
 
   const initialLoad = useRef(true);
 
-  // Real-time speed tracking via WebSocket
-  const [nodeSpeeds, setNodeSpeeds] = useState<Record<number, { uploadSpeed: number; downloadSpeed: number }>>({});
-  const prevBytesRef = useRef<Record<number, { rx: number; tx: number; time: number }>>({});
-
+  // WebSocket for uptime updates
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) return;
@@ -88,37 +69,10 @@ export default function NodePage() {
             const sysData = typeof msg.data === 'string' ? JSON.parse(msg.data) : msg.data;
             const nodeId = parseInt(msg.id, 10);
 
-            if (sysData.bytes_received !== undefined && sysData.bytes_transmitted !== undefined) {
-              const now = Date.now() / 1000;
-              const rx = sysData.bytes_received;
-              const tx = sysData.bytes_transmitted;
-
-              const prev = prevBytesRef.current[nodeId];
-              if (prev) {
-                const dt = now - prev.time;
-                if (dt > 0) {
-                  if (rx >= prev.rx && tx >= prev.tx) {
-                    setNodeSpeeds(s => ({
-                      ...s,
-                      [nodeId]: {
-                        downloadSpeed: (rx - prev.rx) / dt,
-                        uploadSpeed: (tx - prev.tx) / dt,
-                      }
-                    }));
-                  } else {
-                    setNodeSpeeds(s => ({
-                      ...s,
-                      [nodeId]: { downloadSpeed: 0, uploadSpeed: 0 }
-                    }));
-                  }
-                }
-              }
-              prevBytesRef.current[nodeId] = { rx, tx, time: now };
-
-              // Update bytesReceived/bytesTransmitted on nodes
+            if (sysData.uptime !== undefined) {
               setNodes(prev => prev.map(n =>
                 n.id === nodeId
-                  ? { ...n, bytesReceived: rx, bytesTransmitted: tx, cpuUsage: sysData.cpu_usage, memUsage: sysData.memory_usage, uptime: sysData.uptime }
+                  ? { ...n, uptime: sysData.uptime }
                   : n
               ));
             }
@@ -392,7 +346,7 @@ export default function NodePage() {
   const renderTableRows = () => {
     const rows: React.ReactNode[] = [];
     let lastGroup: string | null = null;
-    const totalCols = 17;
+    const totalCols = 11;
     for (const n of sortedNodes) {
       const group = n.groupName || '';
       if (hasGroups && group !== lastGroup) {
@@ -466,21 +420,6 @@ export default function NodePage() {
               </Button>
             )}
           </TableCell>
-          <TableCell className="text-sm">
-            {isOnline && n.cpuUsage != null ? `${n.cpuUsage.toFixed(1)}%` : '-'} / {isOnline && n.memUsage != null ? `${n.memUsage.toFixed(1)}%` : '-'}
-          </TableCell>
-          <TableCell className="text-sm">
-            {isOnline && nodeSpeeds[n.id] ? formatSpeed(nodeSpeeds[n.id].uploadSpeed) : '-'}
-          </TableCell>
-          <TableCell className="text-sm">
-            {isOnline && nodeSpeeds[n.id] ? formatSpeed(nodeSpeeds[n.id].downloadSpeed) : '-'}
-          </TableCell>
-          <TableCell className="text-sm">
-            {isOnline && n.bytesTransmitted != null ? formatBytes(n.bytesTransmitted) : '-'}
-          </TableCell>
-          <TableCell className="text-sm">
-            {isOnline && n.bytesReceived != null ? formatBytes(n.bytesReceived) : '-'}
-          </TableCell>
           <TableCell className="text-sm">{formatUptime(n.uptime)}</TableCell>
           <TableCell>
             <div className="flex gap-1">
@@ -534,20 +473,15 @@ export default function NodePage() {
                 <TableHead>GOST</TableHead>
                 <TableHead>Xray</TableHead>
                 <TableHead>{t('node.version')}</TableHead>
-                <TableHead>{t('node.cpuMem')}</TableHead>
-                <TableHead>{t('monitor.upload')}</TableHead>
-                <TableHead>{t('monitor.download')}</TableHead>
-                <TableHead>{t('monitor.totalUpload')}</TableHead>
-                <TableHead>{t('monitor.totalDownload')}</TableHead>
                 <TableHead>{t('node.uptime')}</TableHead>
                 <TableHead>{t('node.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={17} className="text-center py-8">{t('common.loading')}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={11} className="text-center py-8">{t('common.loading')}</TableCell></TableRow>
               ) : nodes.length === 0 ? (
-                <TableRow><TableCell colSpan={17} className="text-center py-8 text-muted-foreground">{t('common.noData')}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">{t('common.noData')}</TableCell></TableRow>
               ) : (
                 renderTableRows()
               )}
