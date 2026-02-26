@@ -316,9 +316,9 @@ function AdminDashboard({ stats, updateInfo }: { stats: any; updateInfo: UpdateI
                   </TableRow>
                 ) : (
                   (stats.topUsers || []).map((user: any, idx: number) => (
-                    <TableRow key={user.name}>
+                    <TableRow key={user.userId ?? `${user.name}-${idx}`}>
                       <TableCell className="font-medium">{idx + 1}</TableCell>
-                      <TableCell>{user.name}</TableCell>
+                      <TableCell>{user.name || `#${user.userId || '-'}`}</TableCell>
                       <TableCell>
                         <div className="text-sm">{formatBytes(user.flow || 0)}</div>
                         <div className="text-xs text-muted-foreground space-y-0.5">

@@ -1,10 +1,10 @@
 package service
 
 import (
-	"fmt"
 	"flux-panel/go-backend/dto"
 	"flux-panel/go-backend/model"
 	"flux-panel/go-backend/pkg"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -452,6 +452,7 @@ func DeleteUser(id int64) dto.R {
 
 	// 5. Delete statistics_flow records
 	DB.Where("user_id = ?", id).Delete(&model.StatisticsFlow{})
+	DB.Where("user_id = ?", id).Delete(&model.StatisticsUserFlow{})
 
 	// 6. Delete the user
 	if err := DB.Delete(&model.User{}, id).Error; err != nil {

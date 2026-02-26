@@ -4,7 +4,9 @@ import (
 	"flux-panel/go-backend/dto"
 	"flux-panel/go-backend/model"
 	"flux-panel/go-backend/pkg"
+	"fmt"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -44,17 +46,17 @@ func GetAdminDashboardStats() dto.R {
 	topUsers := getUserMonthlyTrafficRanking()
 
 	return dto.Ok(map[string]interface{}{
-		"nodes":               map[string]int64{"total": totalNodes, "online": onlineNodes},
-		"users":               map[string]int64{"total": totalUsers},
-		"forwards":            map[string]int64{"total": totalForwards, "active": activeForwards},
-		"todayTraffic":        trafficData.todayFlow,
-		"trafficHistory":      trafficData.history,
-		"todayXrayTraffic":    xrayData.todayFlow,
-		"xrayTrafficHistory":  xrayData.history,
-		"monthlyGostTraffic":  monthlyGost,
-		"monthlyXrayTraffic":  monthlyXray,
-		"topUsers":            topUsers,
-		"nodeTrafficRank":     nodeTrafficRank,
+		"nodes":              map[string]int64{"total": totalNodes, "online": onlineNodes},
+		"users":              map[string]int64{"total": totalUsers},
+		"forwards":           map[string]int64{"total": totalForwards, "active": activeForwards},
+		"todayTraffic":       trafficData.todayFlow,
+		"trafficHistory":     trafficData.history,
+		"todayXrayTraffic":   xrayData.todayFlow,
+		"xrayTrafficHistory": xrayData.history,
+		"monthlyGostTraffic": monthlyGost,
+		"monthlyXrayTraffic": monthlyXray,
+		"topUsers":           topUsers,
+		"nodeTrafficRank":    nodeTrafficRank,
 	})
 }
 
@@ -96,7 +98,7 @@ func GetUserDashboardStats(userId int64) dto.R {
 
 // trafficData holds both 24h traffic history and today's total.
 type trafficData struct {
-	history  []map[string]interface{}
+	history   []map[string]interface{}
 	todayFlow int64
 }
 
@@ -437,6 +439,15 @@ func getMonthlyTraffic() (gostMonthly int64, xrayMonthly int64) {
 					continue
 				}
 				if !firstSeen {
+					// New forward with first snapshot inside current month:
+					// count its initial cumulative snapshot as month traffic.
+					if bt >= monthStart {
+						delta := snap
+						if delta < 0 {
+							delta = 0
+						}
+						gostMonthly += delta
+					}
 					prev = snap
 					firstSeen = true
 					continue
@@ -492,6 +503,15 @@ func getMonthlyTraffic() (gostMonthly int64, xrayMonthly int64) {
 					continue
 				}
 				if !firstSeen {
+					// New inbound with first snapshot inside current month:
+					// count its initial cumulative snapshot as month traffic.
+					if bt >= monthStart {
+						delta := snap
+						if delta < 0 {
+							delta = 0
+						}
+						xrayMonthly += delta
+					}
 					prev = snap
 					firstSeen = true
 					continue
@@ -582,6 +602,15 @@ func getNodeTrafficRanking() []map[string]interface{} {
 					continue
 				}
 				if !firstSeen {
+					// New forward with first snapshot inside current month:
+					// count its initial cumulative snapshot as month traffic.
+					if bt >= monthStart {
+						delta := snap
+						if delta < 0 {
+							delta = 0
+						}
+						fwFlow[fwId] += delta
+					}
 					prev = snap
 					firstSeen = true
 					continue
@@ -655,6 +684,15 @@ func getNodeTrafficRanking() []map[string]interface{} {
 					continue
 				}
 				if !firstSeen {
+					// New inbound with first snapshot inside current month:
+					// count its initial cumulative snapshot as month traffic.
+					if bt >= monthStart {
+						delta := snap
+						if delta < 0 {
+							delta = 0
+						}
+						ibFlow[ibId] += delta
+					}
 					prev = snap
 					firstSeen = true
 					continue
@@ -698,9 +736,13 @@ func getNodeTrafficRanking() []map[string]interface{} {
 	for id := range allNodeIds {
 		gf := nodeGostFlow[id]
 		xf := nodeXrayFlow[id]
+		name := nodeNameMap[id]
+		if strings.TrimSpace(name) == "" {
+			name = fmt.Sprintf("节点#%d", id)
+		}
 		ranking = append(ranking, nodeRank{
 			NodeId:    id,
-			NodeName:  nodeNameMap[id],
+			NodeName:  name,
 			GostFlow:  gf,
 			XrayFlow:  xf,
 			TotalFlow: gf + xf,
@@ -787,6 +829,23 @@ func getUserMonthlyTrafficRanking() []map[string]interface{} {
 				continue
 			}
 			if !firstSeen {
+				// New user with first snapshot inside current month:
+				// count its initial cumulative snapshot as month traffic.
+				if bt >= monthStart {
+					gd := snap.GostFlow
+					xd := snap.XrayFlow
+					if gd < 0 {
+						gd = 0
+					}
+					if xd < 0 {
+						xd = 0
+					}
+					if userMonthly[uid] == nil {
+						userMonthly[uid] = &userFlow{}
+					}
+					userMonthly[uid].GostFlow += gd
+					userMonthly[uid].XrayFlow += xd
+				}
 				prevGost = snap.GostFlow
 				prevXray = snap.XrayFlow
 				firstSeen = true
@@ -816,6 +875,7 @@ func getUserMonthlyTrafficRanking() []map[string]interface{} {
 	}
 
 	type rankEntry struct {
+		UserId    int64
 		Name      string
 		GostFlow  int64
 		XrayFlow  int64
@@ -823,12 +883,23 @@ func getUserMonthlyTrafficRanking() []map[string]interface{} {
 	}
 	ranking := make([]rankEntry, 0, len(userMonthly))
 	for uid, uf := range userMonthly {
+		name, ok := userNameMap[uid]
+		if !ok {
+			// Skip orphaned stats after user deletion.
+			continue
+		}
+		name = strings.TrimSpace(name)
+		if name == "" {
+			name = fmt.Sprintf("用户#%d", uid)
+		}
+
 		total := uf.GostFlow + uf.XrayFlow
 		if total <= 0 {
 			continue
 		}
 		ranking = append(ranking, rankEntry{
-			Name:      userNameMap[uid],
+			UserId:    uid,
+			Name:      name,
 			GostFlow:  uf.GostFlow,
 			XrayFlow:  uf.XrayFlow,
 			TotalFlow: total,
@@ -843,6 +914,7 @@ func getUserMonthlyTrafficRanking() []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(ranking))
 	for _, r := range ranking {
 		result = append(result, map[string]interface{}{
+			"userId":   r.UserId,
 			"name":     r.Name,
 			"flow":     r.TotalFlow,
 			"gostFlow": r.GostFlow,
