@@ -41,6 +41,10 @@ func versionLessThan(a, b string) bool {
 }
 
 func NodeCreate(c *gin.Context) {
+	if useNodePassMode() {
+		c.JSON(http.StatusOK, dto.Err("nodepass 模式下节点由 agent 自动注册，暂不支持手动创建"))
+		return
+	}
 	var d dto.NodeDto
 	if err := c.ShouldBindJSON(&d); err != nil {
 		c.JSON(http.StatusOK, dto.Err("参数错误"))
@@ -50,10 +54,35 @@ func NodeCreate(c *gin.Context) {
 }
 
 func NodeList(c *gin.Context) {
+	if useNodePassMode() {
+		machines, err := npGetMachines()
+		if err != nil {
+			c.JSON(http.StatusOK, dto.Err("获取 nodepass 机器列表失败: "+err.Error()))
+			return
+		}
+		rows := make([]map[string]interface{}, 0, len(machines))
+		for _, m := range machines {
+			rows = append(rows, map[string]interface{}{
+				"id":        stableID(m.MachineId),
+				"name":      m.MachineId,
+				"serverIp":  m.Ip,
+				"entryIps":  m.Ip,
+				"status":    m.Status,
+				"groupName": "nodepass",
+				"version":   "nodepass",
+			})
+		}
+		c.JSON(http.StatusOK, dto.Ok(rows))
+		return
+	}
 	c.JSON(http.StatusOK, service.GetAllNodes())
 }
 
 func NodeUpdate(c *gin.Context) {
+	if useNodePassMode() {
+		c.JSON(http.StatusOK, dto.Err("nodepass 模式下节点由 agent 自动上报，暂不支持手动更新"))
+		return
+	}
 	var d dto.NodeUpdateDto
 	if err := c.ShouldBindJSON(&d); err != nil {
 		c.JSON(http.StatusOK, dto.Err("参数错误"))
@@ -63,6 +92,10 @@ func NodeUpdate(c *gin.Context) {
 }
 
 func NodeDelete(c *gin.Context) {
+	if useNodePassMode() {
+		c.JSON(http.StatusOK, dto.Err("nodepass 模式下节点由 agent 生命周期管理，暂不支持删除"))
+		return
+	}
 	var d struct {
 		ID int64 `json:"id" binding:"required"`
 	}
@@ -74,6 +107,10 @@ func NodeDelete(c *gin.Context) {
 }
 
 func NodeListAccessible(c *gin.Context) {
+	if useNodePassMode() {
+		NodeList(c)
+		return
+	}
 	userId := GetUserId(c)
 	roleId := GetRoleId(c)
 	var d struct {

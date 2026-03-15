@@ -12,6 +12,24 @@ A traffic forwarding and proxy management panel.
 建议升级前，记下节点的卸载命令，面板成功升级后再重新安装
 
 
+## NodePass Backend Mode (compat bridge)
+
+This fork now supports a NodePass backend compatibility mode for core pages (Node/Tunnel/Dashboard stats).
+
+Set backend env:
+
+```env
+BACKEND_ENGINE=nodepass
+NODEPASS_CONTROL_BASE=http://127.0.0.1:3000/api/control
+```
+
+When enabled:
+- Node list reads from NodePass control `/machines`
+- Tunnel list/create/update/delete bridges to NodePass control `/tunnels`
+- Dashboard stats read machine/tunnel summary from NodePass control
+
+> This is a bridge mode to migrate frontend quickly from gost-first backend to nodepass-first control plane.
+
 ## Deployment
 
 > Requires Docker. Supports amd64 and arm64 architectures.
